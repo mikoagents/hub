@@ -46,3 +46,59 @@ and PostgreSQL databases, migrations, retries, queue release and restart recover
 workflow dispatch and independent PRs; the external Paseo execution transport is represented
 at its boundary. `src/triggers/github/ci-completion.test.ts` covers event eligibility and
 logical attempt identity. These tests do not prove a live GitHub-to-coding-agent repair.
+
+## Avoiding unnecessary agent executions
+
+Event deduplication alone cannot combine independent workflow completions and review
+notifications. Opt in to a deterministic GitHub readiness gate and state deduplication:
+
+```yaml
+run:
+  coordination:
+    serialize: conversation
+    deduplicate: provider_state
+    github_pull_request:
+      review:
+        from_user: reviewer[bot]
+        body_contains: "<!-- review-protocol:2 -->"
+      feedback_from: ["reviewer[bot]", "codex[bot]"]
+      required_workflows: ["Coverage", "Repository Checks"]
+```
+
+The policy is read-only and grants no agent authority. It requires an open, non-draft,
+same-repository PR at the event's exact head, and a submitted current-head review by the
+configured reviewer containing the configured text. Every named mandatory workflow must
+exist, and every currently known PR workflow at that head must be completed. Conditional
+workflows can remain absent; name only workflows that always run for the selected PRs.
+A missing review/workflow or pending CI drops the event without creating an execution.
+A later review or workflow completion can pass the gate; there is no model polling loop.
+
+An agent starts only when there is a failed workflow, an unresolved thread by one of the
+configured feedback authors, or a current-head review from those authors with
+`CHANGES_REQUESTED` state or `CHANGES REQUESTED` in its body. Clean approval and unrelated
+successful CI notifications need no agent. This is a routing hint, not a replacement for
+the agent verifying findings, logs and repository-specific required checks.
+
+The persisted state identity combines repository/PR, head/base, policy, trusted review and
+thread content, and failed workflow attempts. It is shared across review and CI sources
+and survives restart and configuration revisions. Resolving a thread and completing an
+unrelated successful workflow do not introduce new evidence. New findings or a new failed
+CI attempt can start another repair, including on the same head. A failed accepted run
+also retains its claim, preventing automatic failure/retry loops for identical input.
+Changing the policy deliberately changes the input identity.
+
+Before dispatch, Hub waits for the existing conversation owner, then rechecks whether the
+PR is still open, non-draft and on the accepted head. An obsolete queued step is skipped
+before an execution or meter unit is created. The database exclusion at execution creation
+remains authoritative; the earlier queue check avoids repeated GitHub reads while busy.
+Read failures propagate for durable retry and never fall back to a model. Review and thread
+pagination is bounded at 1,000 entries; Actions search truncation at 1,000 fails closed.
+This gate does not watch external checks/statuses independently or impose a repair-round
+budget. It consumes GitHub API requests; it does not consume model tokens while waiting.
+
+`github-readiness.integration.test.ts` covers pending and clean PRs, cross-source duplicates,
+restart, genuinely new evidence, meter usage and stale queued work using real storage.
+`pull-request-reader.integration.test.ts` exercises the production Octokit transport against
+a local GitHub API boundary, including pagination, bot identity and read failures. The
+same reader has also been checked read-only against a real GitHub PR; it does not prove a
+live coding-agent repair and push.

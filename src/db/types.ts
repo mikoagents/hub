@@ -1252,6 +1252,7 @@ export interface Database {
   ): Promise<WorkflowWakeupRecord | undefined>;
   wakeWorkflowRun(triggerRunId: string, availableAt: Date): Promise<void>;
   deleteWorkflowWakeup(triggerRunId: string): Promise<void>;
+  isWorkflowGroupBusy(triggerRunId: string): Promise<boolean>;
   createWorkflowStepExecution(input: WorkflowStepExecutionInput): Promise<{
     deferred?: boolean;
     stepRun: WorkflowStepRunRecord;

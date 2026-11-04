@@ -1,4 +1,5 @@
 import { createGitHubLifecycle } from "./lifecycle.js";
+import { createPullRequestReader } from "./pull-request-reader.js";
 import { createHash } from "node:crypto";
 import type { AuthServer } from "../../auth/server.js";
 import { createGitHubAuth, repositoryNamesForAccount, type GitHubAuth } from "../../auth/github.js";
@@ -252,6 +253,7 @@ export function createGitHubRegistration(
       ({ configurationStoreForProject }) => {
         configurationForProject = configurationStoreForProject;
         return createGitHubTriggerProvider({
+          readPullRequest: createPullRequestReader(appAuth),
           async resolveWorkflowPullRequest(event) {
             const workflow = event.payload["workflow_run"];
             if (

@@ -466,6 +466,36 @@ class MemoryDatabase implements Database {
     this.workflowWakeups.delete(triggerRunId);
   }
 
+  async isWorkflowGroupBusy(triggerRunId: string): Promise<boolean> {
+    return this.workflowGroupIsBusy(triggerRunId);
+  }
+
+  private workflowGroupIsBusy(triggerRunId: string): boolean {
+    const run = this.triggerRuns.get(triggerRunId);
+    if (run === undefined || run.outcome !== "accepted") return false;
+    return (
+      run.concurrencyKey !== undefined &&
+      [...this.triggerRuns.values()].some(
+        (other) =>
+          other.outcome === "accepted" &&
+          other.id !== run.id &&
+          other.projectId === run.projectId &&
+          other.concurrencyKey === run.concurrencyKey &&
+          ((other.status === "running" &&
+            (other.createdAt < run.createdAt ||
+              (other.createdAt.getTime() === run.createdAt.getTime() && other.id < run.id))) ||
+            [...this.agentExecutions.values()].some(
+              (execution) =>
+                execution.workflowStepRunId !== null &&
+                this.workflowStepRuns.get(execution.workflowStepRunId)?.triggerRunId === other.id &&
+                (execution.status === "spawning" ||
+                  execution.status === "running" ||
+                  (execution.hubAction !== null && execution.hubActionCompletedAt === null)),
+            )),
+      )
+    );
+  }
+
   async createWorkflowStepExecution(input: WorkflowStepExecutionInput) {
     let step = (await this.listWorkflowStepRunsForTriggerRun(input.triggerRunId)).find(
       (candidate) => candidate.stepId === input.stepId && candidate.ordinal === input.ordinal,
@@ -493,27 +523,7 @@ class MemoryDatabase implements Database {
         created: false,
       };
     }
-    if (
-      run.concurrencyKey !== undefined &&
-      [...this.triggerRuns.values()].some(
-        (other) =>
-          other.outcome === "accepted" &&
-          other.id !== run.id &&
-          other.projectId === run.projectId &&
-          other.concurrencyKey === run.concurrencyKey &&
-          ((other.status === "running" &&
-            (other.createdAt < run.createdAt ||
-              (other.createdAt.getTime() === run.createdAt.getTime() && other.id < run.id))) ||
-            [...this.agentExecutions.values()].some(
-              (execution) =>
-                execution.workflowStepRunId !== null &&
-                this.workflowStepRuns.get(execution.workflowStepRunId)?.triggerRunId === other.id &&
-                (execution.status === "spawning" ||
-                  execution.status === "running" ||
-                  (execution.hubAction !== null && execution.hubActionCompletedAt === null)),
-            )),
-      )
-    ) {
+    if (this.workflowGroupIsBusy(run.id)) {
       return { stepRun: step, execution: undefined, created: false, deferred: true };
     }
     // Reserve one meter unit before creating the execution, so a denied reservation creates

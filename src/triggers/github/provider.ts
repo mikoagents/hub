@@ -29,6 +29,11 @@ import {
 import type { NormalizedGitHubEvent } from "../../auth/github-events.js";
 import { classifyGitHubEvent, GITHUB_TRIGGER_SOURCE_NAMES } from "./classification.js";
 import { completedWorkflowRun, githubEventKey } from "./workflow-run.js";
+import {
+  currentPullRequest,
+  matchPullRequestReadiness,
+  type ReadPullRequest,
+} from "./pull-request-gate.js";
 
 export interface GitHubReactionClient {
   /** Returns null when the installation or reaction target is unavailable (GitHub 404). */
@@ -61,6 +66,7 @@ export type GitHubReactionContent =
 
 export interface GitHubMergeData {
   github: {
+    repair_input_key?: string;
     workflow_run?: {
       id: number;
       run_attempt: number;
@@ -159,6 +165,7 @@ export type GitHubReactionSubject =
   | { kind: "pull_request_review_comment"; commentId: number };
 
 export interface GitHubTriggerContext {
+  readiness?: { number: number; headSha: string };
   provider: "github";
   organizationId: string;
   target: { installationId: number; repository: string };
@@ -172,6 +179,7 @@ interface GitHubReactionState {
 }
 
 export function createGitHubTriggerProvider(options: {
+  readPullRequest?: ReadPullRequest;
   resolveWorkflowPullRequest?: (
     event: NormalizedGitHubEvent,
   ) => Promise<{ number: number } | undefined>;
@@ -253,7 +261,17 @@ export function createGitHubTriggerProvider(options: {
           });
           continue;
         }
+        let stateKey: string | undefined;
+        const policy = compiledTrigger.coordination?.github_pull_request;
+        if (policy !== undefined) {
+          const ready = await matchPullRequestReadiness(event, policy, options.readPullRequest);
+          if (ready === undefined) continue;
+          stateKey = ready.key;
+          triggerContext.readiness = ready.readiness;
+          triggerContext.event.github.repair_input_key = ready.key;
+        }
         matches.push({
+          ...(stateKey === undefined ? {} : { stateKey }),
           eventKey: githubEventKey(event),
           conversation: githubConversation(event),
           triggerName: match.trigger.name,
@@ -266,6 +284,16 @@ export function createGitHubTriggerProvider(options: {
       }
 
       return matches.length === 0 ? "trigger_filters_rejected" : matches;
+    },
+    async shouldStart(context) {
+      if (context.readiness === undefined) return true;
+      if (options.readPullRequest === undefined)
+        throw new Error("GitHub readiness reader unavailable");
+      const snapshot = await options.readPullRequest({
+        ...context.target,
+        number: context.readiness.number,
+      });
+      return currentPullRequest(snapshot, context.readiness.headSha);
     },
     async materializeContext(launch) {
       return launch.triggerContext.event;

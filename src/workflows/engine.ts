@@ -185,6 +185,12 @@ export class DurableWorkflowEngine {
           throw new Error(`compiled trigger not found: ${acceptedMatch.triggerName}`);
         const runDeadline = new Date(createdAt.getTime() + compiledTrigger.maxRuntimeMs);
         if (
+          compiledTrigger.coordination?.deduplicate === "provider_state" &&
+          acceptedMatch.stateKey === undefined
+        ) {
+          throw new Error("workflow state deduplication requires provider state");
+        }
+        if (
           compiledTrigger.coordination?.serialize === "conversation" &&
           acceptedMatch.conversation === null
         ) {
@@ -203,6 +209,9 @@ export class DurableWorkflowEngine {
             ? {
                 idempotencyKey: `${compiledTrigger.name}:${trigger.source}:${acceptedMatch.eventKey ?? trigger.deliveryId}`,
               }
+            : {}),
+          ...(compiledTrigger.coordination?.deduplicate === "provider_state"
+            ? { idempotencyKey: `state:${acceptedMatch.stateKey!}` }
             : {}),
           organizationId: trigger.organizationId,
           projectId: trigger.projectId,
@@ -276,34 +285,9 @@ export class DurableWorkflowEngine {
       context,
       recoverPreHandoffDispatch,
     } = prepared;
-    let shouldRun = true;
-    try {
-      shouldRun =
-        step.condition === undefined || truthy(evaluateExpression(step.condition, context));
-    } catch (error) {
-      const reason =
-        error instanceof Error ? error.message : "workflow_condition_evaluation_failed";
-      this.report(error, "workflow.condition.evaluate", { triggerRunId: run.id, stepId: step.id });
-      const failed = await database.failWorkflowRun(run.id, "failed", reason, step.id);
-      if (failed?.transitioned === true) await this.notifyWorkflowRunTerminal(failed.run);
-      return;
-    }
-    try {
-      const composedValues = composeValuesIfAvailable(trigger.values, context);
-      if (composedValues !== undefined) {
-        await database.updateTriggerRunValues(run.id, composedValues);
-      }
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : "workflow_value_evaluation_failed";
-      this.report(error, "workflow.values.evaluate", { triggerRunId: run.id, stepId: step.id });
-      const failed = await database.failWorkflowRun(run.id, "failed", reason, step.id);
-      if (failed?.transitioned === true) await this.notifyWorkflowRunTerminal(failed.run);
-      return;
-    }
-    if (!shouldRun) {
-      await database.markWorkflowStepSkipped(run.id, step.id, "condition_false");
-      return;
-    }
+    if (!(await this.evaluateStep(prepared))) return;
+    const preflight = await this.preflightDispatch(prepared, wakeup);
+    if (preflight !== undefined) return preflight === "deferred" ? "deferred" : undefined;
     const startedAt = this.now();
     const deadlineAt = new Date(
       Math.min(run.deadlineAt.getTime(), startedAt.getTime() + step.maxRuntimeMs),
@@ -397,6 +381,64 @@ export class DurableWorkflowEngine {
       throw new Error(`durable dispatch returned a different execution: ${execution.id}`);
     }
     await this.finishPersistedExecution(execution);
+  }
+
+  private async evaluateStep(prepared: PreparedWorkflowWakeup): Promise<boolean> {
+    const { run, step, context, trigger } = prepared;
+    const database = this.options.database!;
+    let shouldRun = true;
+    try {
+      shouldRun =
+        step.condition === undefined || truthy(evaluateExpression(step.condition, context));
+    } catch (error) {
+      const reason =
+        error instanceof Error ? error.message : "workflow_condition_evaluation_failed";
+      this.report(error, "workflow.condition.evaluate", { triggerRunId: run.id, stepId: step.id });
+      const failed = await database.failWorkflowRun(run.id, "failed", reason, step.id);
+      if (failed?.transitioned === true) await this.notifyWorkflowRunTerminal(failed.run);
+      return false;
+    }
+    try {
+      const composedValues = composeValuesIfAvailable(trigger.values, context);
+      if (composedValues !== undefined) {
+        await database.updateTriggerRunValues(run.id, composedValues);
+      }
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "workflow_value_evaluation_failed";
+      this.report(error, "workflow.values.evaluate", { triggerRunId: run.id, stepId: step.id });
+      const failed = await database.failWorkflowRun(run.id, "failed", reason, step.id);
+      if (failed?.transitioned === true) await this.notifyWorkflowRunTerminal(failed.run);
+      return false;
+    }
+    if (!shouldRun) {
+      await database.markWorkflowStepSkipped(run.id, step.id, "condition_false");
+      return false;
+    }
+    return true;
+  }
+
+  private async preflightDispatch(
+    prepared: PreparedWorkflowWakeup,
+    wakeup: WorkflowWakeupRecord,
+  ): Promise<"deferred" | "skipped" | undefined> {
+    const { run, next, step } = prepared;
+    if (next.agentExecutionId !== null) return undefined;
+    const provider = providerForTriggerContext(this.options.providers ?? [], run.triggerContext);
+    if (provider?.shouldStart === undefined) return undefined;
+    const database = this.options.database!;
+    if (await database.isWorkflowGroupBusy(run.id)) {
+      await database.releaseWorkflowWakeup(
+        run.id,
+        new Date(this.now().getTime() + 1_000),
+        wakeup.leaseExpiresAt!,
+      );
+      return "deferred";
+    }
+    if (!(await provider.shouldStart(run.triggerContext))) {
+      await database.markWorkflowStepSkipped(run.id, step.id, "provider_state_obsolete");
+      return "skipped";
+    }
+    return undefined;
   }
 
   private async deferUnavailableDispatch(

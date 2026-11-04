@@ -693,6 +693,16 @@ class PgDatabase implements Database {
     ]);
   }
 
+  async isWorkflowGroupBusy(triggerRunId: string) {
+    return this.pool.transaction(async (client) => {
+      const rows = await client.query<TriggerRunRow>("select * from trigger_runs where id = $1", [
+        triggerRunId,
+      ]);
+      const run = rows.rows[0];
+      return run === undefined ? false : workflowGroupBusy(client, this.locks, run);
+    });
+  }
+
   async createWorkflowStepExecution(input: WorkflowStepExecutionInput) {
     try {
       return await this.pool.transaction(async (client) => {

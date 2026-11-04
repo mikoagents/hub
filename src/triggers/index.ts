@@ -52,6 +52,7 @@ export function cleanTriggerAgent(agent: TriggerAgentConfig): TriggerAgentConfig
 
 interface TriggerProviderMatchBase<TriggerContext, OutputContext> {
   eventKey?: string;
+  stateKey?: string;
   conversation?: import("./continuation.js").Conversation | null;
   triggerName: string;
   triggerContext: TriggerContext;
@@ -145,6 +146,8 @@ export interface TriggerProvider<
   materializeContext?(
     launch: TriggerContextMaterialization<TriggerContext>,
   ): Promise<MaterializedContext>;
+  /** Recheck volatile external eligibility before creating an execution or spending tokens. */
+  shouldStart?(triggerContext: TriggerContext): Promise<boolean>;
   onDispatchAccepted?(
     triggerContext: TriggerContext,
     outputContext: OutputContext,
