@@ -1,6 +1,7 @@
 import { ExecutionAuthorityRepository } from "../execution-authority/index.js";
 import { ScheduleRepository } from "../triggers/schedule/index.js";
 import { acceptWorkflowRun } from "./workflow-intake.js";
+import { workflowGroupBusy } from "./workflow-coordination.js";
 import { randomUUID } from "node:crypto";
 import type { LaunchMachineIntent } from "../dispatcher/launch-machine-intent.js";
 import { parseCompiledHubConfig, type JsonValue } from "../config/compiler.js";
@@ -747,6 +748,14 @@ class PgDatabase implements Database {
             execution:
               existing.rows[0] === undefined ? undefined : toAgentExecutionRecord(existing.rows[0]),
             created: false,
+          };
+        }
+        if (await workflowGroupBusy(client, this.locks, run)) {
+          return {
+            stepRun: toWorkflowStepRunRecord(step),
+            execution: undefined,
+            created: false,
+            deferred: true,
           };
         }
         const execution = await insertAgentExecutionOnClient(client, {
@@ -4512,6 +4521,8 @@ export interface ProviderEventReceiptRow extends QueryRow {
 }
 
 interface TriggerRunRow extends QueryRow {
+  concurrency_key: string | null;
+  idempotency_key: string | null;
   conversation: import("../triggers/continuation.js").Conversation | null;
   id: string;
   organization_id: string;
@@ -4633,6 +4644,8 @@ function toTriggerRunRecord(row: TriggerRunRow): TriggerRunRecord {
   }
   if (row.deadline_at === null) throw new Error(`invalid accepted trigger run ${row.id}`);
   const accepted: AcceptedTriggerRunRecord = {
+    ...(row.concurrency_key == null ? {} : { concurrencyKey: row.concurrency_key }),
+    ...(row.idempotency_key == null ? {} : { idempotencyKey: row.idempotency_key }),
     ...evidence,
     outcome: "accepted",
     status: row.status,

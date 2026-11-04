@@ -740,6 +740,8 @@ interface TriggerRunEvidence {
 }
 
 export interface AcceptedTriggerRunRecord extends TriggerRunEvidence {
+  concurrencyKey?: string;
+  idempotencyKey?: string;
   outcome: "accepted";
   status: "running" | "succeeded" | "failed" | "timed_out";
   deadlineAt: Date;
@@ -797,6 +799,8 @@ export interface WorkflowWakeupRecord {
 }
 
 export interface CreateAcceptedTriggerRunInput {
+  concurrencyKey?: string;
+  idempotencyKey?: string;
   conversation?: import("../triggers/continuation.js").Conversation | null;
   id?: string;
   organizationId: string;
@@ -1249,6 +1253,7 @@ export interface Database {
   wakeWorkflowRun(triggerRunId: string, availableAt: Date): Promise<void>;
   deleteWorkflowWakeup(triggerRunId: string): Promise<void>;
   createWorkflowStepExecution(input: WorkflowStepExecutionInput): Promise<{
+    deferred?: boolean;
     stepRun: WorkflowStepRunRecord;
     execution: AgentExecutionRecord | undefined;
     created: boolean;

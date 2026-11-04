@@ -413,6 +413,8 @@ export const projectTriggerMigrations = pgTable(
 export const triggerRuns = pgTable(
   "trigger_runs",
   {
+    concurrencyKey: text("concurrency_key"),
+    idempotencyKey: text("idempotency_key"),
     id: uuid().defaultRandom().primaryKey(),
     organizationId: text("organization_id").notNull(),
     projectId: uuid("project_id").notNull(),
@@ -445,6 +447,14 @@ export const triggerRuns = pgTable(
     completedAt: timestamp("completed_at", { withTimezone: true }),
   },
   (table) => [
+    uniqueIndex("trigger_runs_project_idempotency_unique")
+      .on(table.projectId, table.idempotencyKey)
+      .where(sql`${table.idempotencyKey} is not null`),
+    index("trigger_runs_project_concurrency_idx").on(
+      table.projectId,
+      table.concurrencyKey,
+      table.status,
+    ),
     uniqueIndex("trigger_runs_receipt_project_configured_unique").on(
       table.providerEventReceiptId,
       table.projectId,

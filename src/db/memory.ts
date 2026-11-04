@@ -249,6 +249,15 @@ class MemoryDatabase implements Database {
   async createAcceptedTriggerRun(
     input: CreateAcceptedTriggerRunInput,
   ): Promise<{ run: AcceptedTriggerRunRecord; created: boolean }> {
+    if (input.idempotencyKey !== undefined) {
+      const duplicate = [...this.triggerRuns.values()].find(
+        (run) =>
+          run.projectId === input.projectId &&
+          run.outcome === "accepted" &&
+          run.idempotencyKey === input.idempotencyKey,
+      );
+      if (duplicate?.outcome === "accepted") return { run: duplicate, created: false };
+    }
     const projectRuns =
       this.triggerRunIdsByProviderEventReceipt.get(input.providerEventReceiptId) ??
       new Map<string, Map<string, string>>();
@@ -263,6 +272,8 @@ class MemoryDatabase implements Database {
     }
     const now = input.createdAt ?? this.options.now?.() ?? new Date();
     const run: AcceptedTriggerRunRecord = {
+      ...(input.concurrencyKey === undefined ? {} : { concurrencyKey: input.concurrencyKey }),
+      ...(input.idempotencyKey === undefined ? {} : { idempotencyKey: input.idempotencyKey }),
       conversation: structuredClone(input.conversation ?? null),
       id: input.id ?? randomUUID(),
       organizationId: input.organizationId,
@@ -481,6 +492,29 @@ class MemoryDatabase implements Database {
         execution: undefined,
         created: false,
       };
+    }
+    if (
+      run.concurrencyKey !== undefined &&
+      [...this.triggerRuns.values()].some(
+        (other) =>
+          other.outcome === "accepted" &&
+          other.id !== run.id &&
+          other.projectId === run.projectId &&
+          other.concurrencyKey === run.concurrencyKey &&
+          ((other.status === "running" &&
+            (other.createdAt < run.createdAt ||
+              (other.createdAt.getTime() === run.createdAt.getTime() && other.id < run.id))) ||
+            [...this.agentExecutions.values()].some(
+              (execution) =>
+                execution.workflowStepRunId !== null &&
+                this.workflowStepRuns.get(execution.workflowStepRunId)?.triggerRunId === other.id &&
+                (execution.status === "spawning" ||
+                  execution.status === "running" ||
+                  (execution.hubAction !== null && execution.hubActionCompletedAt === null)),
+            )),
+      )
+    ) {
+      return { stepRun: step, execution: undefined, created: false, deferred: true };
     }
     // Reserve one meter unit before creating the execution, so a denied reservation creates
     // nothing — the in-memory single-threaded model gives the same atomicity the Postgres

@@ -28,6 +28,7 @@ import {
 } from "../../auth/github-events.js";
 import type { NormalizedGitHubEvent } from "../../auth/github-events.js";
 import { classifyGitHubEvent, GITHUB_TRIGGER_SOURCE_NAMES } from "./classification.js";
+import { completedWorkflowRun, githubEventKey } from "./workflow-run.js";
 
 export interface GitHubReactionClient {
   /** Returns null when the installation or reaction target is unavailable (GitHub 404). */
@@ -60,6 +61,14 @@ export type GitHubReactionContent =
 
 export interface GitHubMergeData {
   github: {
+    workflow_run?: {
+      id: number;
+      run_attempt: number;
+      head_sha: string;
+      conclusion: string | null;
+      name?: string;
+      html_url?: string;
+    };
     delivery_id: string;
     event_name: string;
     repository: { full_name: string };
@@ -163,6 +172,9 @@ interface GitHubReactionState {
 }
 
 export function createGitHubTriggerProvider(options: {
+  resolveWorkflowPullRequest?: (
+    event: NormalizedGitHubEvent,
+  ) => Promise<{ number: number } | undefined>;
   configurationStoreForProject: (projectId: string) => ProjectConfigurationStore;
   reactions: GitHubReactionClient;
   comments?: GitHubReplyClient;
@@ -172,7 +184,25 @@ export function createGitHubTriggerProvider(options: {
     name: "github",
     eventNames: GITHUB_TRIGGER_SOURCE_NAMES,
     async match(externalTrigger) {
-      const event = NormalizedGitHubEventSchema.parse(externalTrigger.payload);
+      let event = NormalizedGitHubEventSchema.parse(externalTrigger.payload);
+      const completed = completedWorkflowRun(event);
+      if (event.type === "workflow_run") {
+        if (completed === undefined) return "trigger_filters_rejected";
+        if (completed.workflow_run.pull_requests.length !== 1) {
+          const pull = await options.resolveWorkflowPullRequest?.(event);
+          if (pull === undefined) return "trigger_filters_rejected";
+          event = {
+            ...event,
+            payload: {
+              ...event.payload,
+              workflow_run: {
+                ...completed.workflow_run,
+                pull_requests: [pull],
+              },
+            },
+          };
+        }
+      }
       const stored = await options
         .configurationStoreForProject(externalTrigger.projectId)
         .getRevision(externalTrigger.configurationRevisionId);
@@ -224,6 +254,7 @@ export function createGitHubTriggerProvider(options: {
           continue;
         }
         matches.push({
+          eventKey: githubEventKey(event),
           conversation: githubConversation(event),
           triggerName: match.trigger.name,
           triggerContext,
@@ -285,8 +316,21 @@ export function createGitHubTriggerProvider(options: {
 
 function buildGitHubMergeData(event: NormalizedGitHubEvent): GitHubMergeData {
   const classified = classifyGitHubEvent(event);
+  const workflow = completedWorkflowRun(event)?.workflow_run;
   return {
     github: {
+      ...(workflow === undefined
+        ? {}
+        : {
+            workflow_run: {
+              id: workflow.id,
+              run_attempt: workflow.run_attempt,
+              head_sha: workflow.head_sha,
+              conclusion: workflow.conclusion,
+              ...(workflow.name === undefined ? {} : { name: workflow.name }),
+              ...(workflow.html_url === undefined ? {} : { html_url: workflow.html_url }),
+            },
+          }),
       delivery_id: event.id,
       event_name: event.type,
       repository: { full_name: event.repo },
@@ -394,7 +438,10 @@ function splitRepo(fullName: string): [owner: string, repo: string] {
 function githubConversation(
   event: NormalizedGitHubEvent,
 ): import("../continuation.js").Conversation | null {
-  const item = event.payload["pull_request"] ?? event.payload["issue"];
+  const item =
+    event.type === "workflow_run"
+      ? classifyGitHubEvent(event).item
+      : (event.payload["pull_request"] ?? event.payload["issue"]);
   if (typeof item !== "object" || item === null) return null;
   const number: unknown = Reflect.get(item, "number");
   if (typeof number !== "number") return null;

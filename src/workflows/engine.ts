@@ -184,10 +184,26 @@ export class DurableWorkflowEngine {
         if (compiledTrigger === undefined)
           throw new Error(`compiled trigger not found: ${acceptedMatch.triggerName}`);
         const runDeadline = new Date(createdAt.getTime() + compiledTrigger.maxRuntimeMs);
+        if (
+          compiledTrigger.coordination?.serialize === "conversation" &&
+          acceptedMatch.conversation === null
+        ) {
+          throw new Error("workflow serialization requires a provider conversation");
+        }
         // Accepting a trigger reserves nothing: a trigger can skip every step, and multi-step
         // workflows create several executions. Metering happens per execution, at creation time
         // (see processWakeup), so the meter is genuinely per-execution and atomic with the work.
         const created = await this.options.database!.createAcceptedTriggerRun({
+          ...(compiledTrigger.coordination?.serialize === "conversation"
+            ? {
+                concurrencyKey: acceptedMatch.conversation!.key,
+              }
+            : {}),
+          ...(compiledTrigger.coordination?.deduplicate === "event"
+            ? {
+                idempotencyKey: `${compiledTrigger.name}:${trigger.source}:${acceptedMatch.eventKey ?? trigger.deliveryId}`,
+              }
+            : {}),
           organizationId: trigger.organizationId,
           projectId: trigger.projectId,
           configurationRevisionId,
@@ -245,8 +261,8 @@ export class DurableWorkflowEngine {
   }
 
   private async processWakeup(wakeup: WorkflowWakeupRecord): Promise<"deferred" | void> {
-    const database = this.options.database;
-    if (database === null) return;
+    // The worker only calls this method after establishing that a database is available.
+    const database = this.options.database!;
     const prepared = await this.prepareWorkflowWakeup(wakeup);
     if (prepared === undefined) return;
     const {
@@ -337,6 +353,14 @@ export class DurableWorkflowEngine {
       reservation,
     });
     if (await this.failDeniedReservation(database, run, step, created.reservationDenied)) return;
+    if (created.deferred) {
+      await database.releaseWorkflowWakeup(
+        run.id,
+        new Date(this.now().getTime() + 1_000),
+        wakeup.leaseExpiresAt!,
+      );
+      return "deferred";
+    }
     if (created.execution === undefined) {
       await database.deleteWorkflowWakeup(run.id);
       return;

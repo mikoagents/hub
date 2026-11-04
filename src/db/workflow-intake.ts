@@ -7,9 +7,9 @@ export async function acceptWorkflowRun(client: QueryHandle, input: CreateAccept
     `insert into trigger_runs
            (id, organization_id, project_id, configuration_revision_id, provider_event_receipt_id,
            configured_trigger_name, outcome, status,
-            prompt, inputs, values, trigger_context, output_context, deadline_at, deadline_kind, rejection, created_at, conversation)
-         values (coalesce($1, gen_random_uuid()), $2, $3, $4, $5, $6, 'accepted', 'running', $7, $8, '{}'::jsonb, $9, $10, $11, null, null, $12, $13)
-         on conflict (provider_event_receipt_id, project_id, configured_trigger_name) do nothing
+            prompt, inputs, values, trigger_context, output_context, deadline_at, deadline_kind, rejection, created_at, conversation, concurrency_key, idempotency_key)
+         values (coalesce($1, gen_random_uuid()), $2, $3, $4, $5, $6, 'accepted', 'running', $7, $8, '{}'::jsonb, $9, $10, $11, null, null, $12, $13, $14, $15)
+         on conflict do nothing
          returning *`,
     [
       input.id ?? null,
@@ -25,6 +25,8 @@ export async function acceptWorkflowRun(client: QueryHandle, input: CreateAccept
       input.deadlineAt,
       input.createdAt ?? new Date(),
       input.conversation ?? null,
+      input.concurrencyKey ?? null,
+      input.idempotencyKey ?? null,
     ],
   );
   let run = inserted.rows[0];
@@ -32,14 +34,21 @@ export async function acceptWorkflowRun(client: QueryHandle, input: CreateAccept
   if (run === undefined) {
     const existing = await client.query<{ id: string; outcome: string }>(
       `select * from trigger_runs
-           where provider_event_receipt_id = $1 and project_id = $2 and configured_trigger_name = $3
+           where project_id = $2 and ((provider_event_receipt_id = $1 and configured_trigger_name = $3)
+             or ($4::text is not null and idempotency_key = $4))
            for update`,
-      [input.providerEventReceiptId, input.projectId, input.configuredTriggerName],
+      [
+        input.providerEventReceiptId,
+        input.projectId,
+        input.configuredTriggerName,
+        input.idempotencyKey ?? null,
+      ],
     );
     run = existing.rows[0];
   }
   if (run === undefined) throw new Error("trigger run insert returned no row");
   if (run.outcome !== "accepted") throw new Error("trigger branch outcome conflict");
+  if (!created) return { id: run.id, created };
   for (const [ordinal, stepId] of input.stepIds.entries()) {
     await client.query(
       `insert into workflow_step_runs

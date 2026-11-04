@@ -252,6 +252,38 @@ export function createGitHubRegistration(
       ({ configurationStoreForProject }) => {
         configurationForProject = configurationStoreForProject;
         return createGitHubTriggerProvider({
+          async resolveWorkflowPullRequest(event) {
+            const workflow = event.payload["workflow_run"];
+            if (
+              typeof workflow !== "object" ||
+              workflow === null ||
+              !("head_sha" in workflow) ||
+              typeof workflow.head_sha !== "string"
+            )
+              return undefined;
+            const [owner, repo] = event.repo.split("/");
+            if (owner === undefined || repo === undefined) return undefined;
+            const octokit = await appAuth.createInstallationOctokit(event.installationId);
+            const result = await octokit.request(
+              "GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls",
+              {
+                owner,
+                repo,
+                commit_sha: workflow.head_sha,
+                per_page: 100,
+              },
+            );
+            const candidates = result.data.filter(
+              (pull) =>
+                pull.state === "open" &&
+                pull.head.sha === workflow.head_sha &&
+                pull.base.repo?.full_name === event.repo,
+            );
+            // Ambiguous association never grants an arbitrary PR write target.
+            return candidates.length === 1 && result.data.length < 100
+              ? { number: candidates[0]!.number }
+              : undefined;
+          },
           configurationStoreForProject,
           reactions,
           comments,

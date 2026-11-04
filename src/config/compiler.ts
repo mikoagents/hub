@@ -1,5 +1,6 @@
 import { eventDefinition, isEditorEvent } from "../triggers/configuration/events.js";
 import { ContinuationSchema } from "../triggers/continuation.js";
+import { CoordinationSchema, type Coordination } from "../workflows/coordination.js";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
@@ -187,6 +188,7 @@ const StepSchema = z
 
 const AuthoredTriggerSchema = z
   .object({
+    coordination: CoordinationSchema.optional(),
     name: z.string().min(1),
     on: z.string().min(1),
     max_runtime: z.string().min(1),
@@ -287,6 +289,7 @@ export type CompiledEnvironment =
   | Exclude<AuthoredEnvironment, { kind: "daemon" }>;
 
 export interface CompiledTrigger {
+  coordination?: Coordination | undefined;
   name: string;
   sourceFile?: string | undefined;
   on: string;
@@ -425,6 +428,7 @@ const CompiledStepSchema: z.ZodType<CompiledStep> = z
 
 const CompiledTriggerSchema: z.ZodType<CompiledTrigger> = z
   .object({
+    coordination: CoordinationSchema.optional(),
     name: z.string().regex(IDENTIFIER),
     sourceFile: z.string().min(1).optional(),
     on: z.string().regex(EVENT_NAME),
@@ -538,6 +542,7 @@ function compileTrigger(
   );
   const values = compileValues(trigger);
   const compiled = {
+    ...(trigger.coordination === undefined ? {} : { coordination: trigger.coordination }),
     name: trigger.name,
     ...(sourceFile === undefined ? {} : { sourceFile }),
     on: trigger.on,

@@ -51,6 +51,7 @@ export function cleanTriggerAgent(agent: TriggerAgentConfig): TriggerAgentConfig
 }
 
 interface TriggerProviderMatchBase<TriggerContext, OutputContext> {
+  eventKey?: string;
   conversation?: import("./continuation.js").Conversation | null;
   triggerName: string;
   triggerContext: TriggerContext;

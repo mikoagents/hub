@@ -6,12 +6,14 @@ import {
   PullRequestReviewPayloadSchema,
 } from "../../auth/github-events.js";
 import type { NormalizedGitHubEvent } from "../../auth/github-events.js";
+import { completedWorkflowRun } from "./workflow-run.js";
 
 export const GITHUB_SEMANTIC_TRIGGER_EVENT_NAMES = [
   "github.issue_created",
   "github.pull_request_created",
   "github.pull_request_ready_for_review",
   "github.pull_request_synchronized",
+  "github.workflow_run_completed",
   "github.issue_comment_created",
   "github.pull_request_comment_created",
   "github.issue_label_added",
@@ -27,6 +29,7 @@ export const GITHUB_TRIGGER_SOURCE_NAMES = [
   "github.pull_request_review",
   "github.pull_request_review_comment",
   "github.push",
+  "github.workflow_run",
 ] as const;
 
 export interface GitHubClassifiedEvent {
@@ -55,7 +58,33 @@ export function classifyGitHubEvent(event: NormalizedGitHubEvent): GitHubClassif
   if (event.type === "issue_comment") return classifyIssueComment(event);
   if (event.type === "pull_request_review") return classifyReview(event);
   if (event.type === "pull_request_review_comment") return classifyReviewComment(event);
+  if (event.type === "workflow_run") return classifyWorkflowRun(event);
   return emptyClassification();
+}
+
+function classifyWorkflowRun(event: NormalizedGitHubEvent): GitHubClassifiedEvent {
+  const payload = completedWorkflowRun(event);
+  if (payload === undefined) return emptyClassification();
+  const workflow = payload.workflow_run;
+  const pull = workflow.pull_requests.length === 1 ? workflow.pull_requests[0] : undefined;
+  return {
+    ...emptyClassification(),
+    semanticEvent: "github.workflow_run_completed",
+    actor: payload.sender?.login ?? "",
+    text: [workflow.name, workflow.conclusion].filter(Boolean).join("\n"),
+    pullRequest: { draft: null, headSha: workflow.head_sha },
+    item:
+      pull === undefined
+        ? null
+        : {
+            type: "pull_request",
+            number: pull.number,
+            title: null,
+            body: null,
+            url: `https://github.com/${event.repo}/pull/${pull.number}`,
+            author: null,
+          },
+  };
 }
 
 function classifyIssue(event: NormalizedGitHubEvent): GitHubClassifiedEvent {

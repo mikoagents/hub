@@ -61,6 +61,7 @@ export function compileTriggerDocument(yaml: string): CompiledTriggerDocument {
   );
   for (const [index, [event, definition]] of events.entries()) {
     const compiledTrigger: AuthoredTrigger = {
+      coordination: authored.run.coordination,
       name: internalEventName(authored.name, index, named),
       on: event,
       max_runtime: authored.max_runtime ?? authored.run.max_runtime,

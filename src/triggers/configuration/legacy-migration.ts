@@ -143,6 +143,7 @@ function singleRunDocument(
       ? {}
       : { max_runtime: duration(trigger.maxRuntimeMs) }),
     run: {
+      ...(trigger.coordination === undefined ? {} : { coordination: trigger.coordination }),
       continuation: { mode: "new" },
       target: {
         daemon: environment.daemon,

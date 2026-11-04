@@ -301,18 +301,21 @@ describe("database migration application", () => {
     );
   }, 120_000);
 
-  it("migrates a production-shaped legacy database without changing durable identities", async () => {
+  it("user upgrades a production-shaped legacy database without changing durable identities", async () => {
+    // Given an existing installation with durable users, runs and daemon identities.
     const fixture = await createLegacyDatabase(postgres, "legacy_upgrade");
     const before = await durableSnapshot(fixture.url);
 
+    // When the current application applies every migration.
     const upgraded = await createDatabase(fixture.url);
     await upgraded.close();
     const after = await durableSnapshot(fixture.url);
 
+    // Then identities survive and the complete current schema is installed.
     assert.deepEqual(after, before);
     assert.deepEqual(await historicalShape(fixture.url), {
       authTables: 7,
-      drizzleMigrations: 50,
+      drizzleMigrations: 51,
       legacyArtifacts: null,
       legacyOperatorPrincipals: null,
       bootstrapOrganizationId: fixture.organizationId,

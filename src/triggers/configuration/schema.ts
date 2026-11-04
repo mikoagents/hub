@@ -1,6 +1,7 @@
 import { RecurrenceSchema } from "../schedule/recurrence.js";
 import { z } from "zod";
 import { ContinuationSchema } from "../continuation.js";
+import { CoordinationSchema } from "../../workflows/coordination.js";
 import { eventDefinition, isEditorEvent } from "./events.js";
 import { AuthoredGitHubAuthoritySchema } from "../../config/github-authority.js";
 
@@ -98,6 +99,7 @@ export const TriggerOutputSchema = z
 
 export const TriggerRunSchema = z
   .object({
+    coordination: CoordinationSchema.optional(),
     target: TriggerTargetSchema,
     agent: TriggerAgentSelectionSchema,
     continuation: ContinuationSchema.default({ mode: "conversation" }),

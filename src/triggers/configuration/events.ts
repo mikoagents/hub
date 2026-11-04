@@ -47,6 +47,7 @@ const EVENTS = {
   "github.issue_created": event("github", "GitHub issue created"),
   "github.pull_request_created": event("github", "GitHub pull request created"),
   "github.pull_request_ready_for_review": event("github", "GitHub pull request ready for review"),
+  "github.workflow_run_completed": event("github", "GitHub pull request CI workflow completed"),
   "github.pull_request_synchronized": event(
     "github",
     "GitHub pull request updated with new commits",
@@ -63,6 +64,7 @@ const EVENTS = {
   "github.pull_request_review": event("github", "GitHub pull request review webhook"),
   "github.pull_request_review_comment": event("github", "GitHub review comment webhook"),
   "github.push": event("github", "GitHub push"),
+  "github.workflow_run": event("github", "GitHub workflow run webhook"),
   "linear.issue_entered_scope": event("linear", "Linear issue entered scope"),
   "linear.issue_assigned": event("linear", "Linear issue assigned"),
   "linear.comment_created": event("linear", "Linear comment created"),
