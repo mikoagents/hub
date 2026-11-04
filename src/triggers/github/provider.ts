@@ -33,6 +33,7 @@ import {
   currentPullRequest,
   matchPullRequestReadiness,
   type ReadPullRequest,
+  type SyncCompletionLabel,
 } from "./pull-request-gate.js";
 
 export interface GitHubReactionClient {
@@ -180,6 +181,7 @@ interface GitHubReactionState {
 
 export function createGitHubTriggerProvider(options: {
   readPullRequest?: ReadPullRequest;
+  syncCompletionLabel?: SyncCompletionLabel;
   resolveWorkflowPullRequest?: (
     event: NormalizedGitHubEvent,
   ) => Promise<{ number: number } | undefined>;
@@ -264,7 +266,12 @@ export function createGitHubTriggerProvider(options: {
         let stateKey: string | undefined;
         const policy = compiledTrigger.coordination?.github_pull_request;
         if (policy !== undefined) {
-          const ready = await matchPullRequestReadiness(event, policy, options.readPullRequest);
+          const ready = await matchPullRequestReadiness(
+            event,
+            policy,
+            options.readPullRequest,
+            options.syncCompletionLabel,
+          );
           if (ready === undefined) continue;
           stateKey = ready.key;
           triggerContext.readiness = ready.readiness;

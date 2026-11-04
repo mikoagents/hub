@@ -125,13 +125,82 @@ it("user skips queued repairs before model creation when their head becomes obso
   }
 }, 60_000);
 
+it("user sees a completion label only after clean review, resolved feedback and green CI without model work", async () => {
+  // Given explicit label authority and a clean technical review with a separate human decision.
+  const fixture = await readinessFixture(true);
+  try {
+    fixture.remote.review();
+    fixture.remote.state.reviews[0]!.body += " clean result\nMAINTAINER DECISION REQUIRED";
+    fixture.remote.finish("Repository Checks", "success");
+    await fixture.deliver("pull_request_review");
+    assert.deepEqual([...fixture.remote.labels], ["needs-human-review"]);
+    // When the last workflow settles, independently from the review event.
+    fixture.remote.finish("Coverage", "success");
+    await fixture.deliver("workflow_run");
+    assert.deepEqual([...fixture.remote.labels], ["needs-human-review", "ai-complete"]);
+    await fixture.deliver("pull_request_review");
+    await fixture.deliver("workflow_run");
+    await fixture.engine.processAvailable();
+    // Then duplicate completion notifications require no workflow run or AI execution.
+    assert.equal(await fixture.runs(), 0);
+    assert.equal(await fixture.executions(), 0);
+    // A stale event does not clear the current head's completion.
+    await fixture.deliver("workflow_run", "old-head");
+    assert(fixture.remote.labels.has("ai-complete"));
+    // A new head invalidates it before that head has any review or CI.
+    fixture.remote.state.headSha = "new-head";
+    await fixture.deliver("pull_request_synchronized", "new-head");
+    assert.deepEqual([...fixture.remote.labels], ["needs-human-review"]);
+  } finally {
+    await fixture.close();
+  }
+}, 60_000);
+
+it("user never retains completion after new feedback, failed checks or incomplete review", async () => {
+  const fixture = await readinessFixture(true);
+  try {
+    fixture.remote.review();
+    fixture.remote.state.reviews[0]!.body += " clean result";
+    fixture.remote.finish("Repository Checks", "success");
+    fixture.remote.finish("Coverage", "success");
+    await fixture.deliver("workflow_run");
+    assert(fixture.remote.labels.has("ai-complete"));
+    fixture.remote.finding("new");
+    await fixture.deliver("pull_request_review");
+    assert(!fixture.remote.labels.has("ai-complete"));
+    fixture.remote.state.threads[0]!.resolved = true;
+    fixture.remote.state.checks[0]!.conclusion = "failure";
+    await fixture.deliver("workflow_run");
+    assert(!fixture.remote.labels.has("ai-complete"));
+    fixture.remote.state.checks[0]!.conclusion = "success";
+    fixture.remote.state.statuses.push({ state: "pending" });
+    await fixture.deliver("workflow_run");
+    assert(!fixture.remote.labels.has("ai-complete"));
+    fixture.remote.state.statuses = [];
+    fixture.remote.state.reviews[0]!.body += " REVIEW INCOMPLETE";
+    await fixture.deliver("pull_request_review");
+    assert(!fixture.remote.labels.has("ai-complete"));
+    fixture.remote.state.reviews[0]!.body = "review protocol clean result";
+    await fixture.deliver("pull_request_review");
+    assert(fixture.remote.labels.has("ai-complete"));
+    fixture.remote.finish("Coverage", "failure", 2);
+    await fixture.deliver("workflow_run");
+    assert(!fixture.remote.labels.has("ai-complete"));
+  } finally {
+    await fixture.close();
+  }
+}, 60_000);
+
 class GitHubPullRequest {
+  labels = new Set(["needs-human-review"]);
   state = {
     state: "OPEN",
     isDraft: false,
     headSha: "head",
     baseSha: "base",
     sameRepository: true,
+    checks: [{ status: "completed", conclusion: "success" as string | null }],
+    statuses: [] as { state: string }[],
     reviews: [] as { id: number; author: string; headSha: string; state: string; body: string }[],
     threads: [] as { id: string; author: string; body: string; resolved: boolean }[],
     workflows: [] as {
@@ -174,7 +243,7 @@ class GitHubPullRequest {
   }
 }
 
-async function readinessFixture() {
+async function readinessFixture(withCompletionLabel = false) {
   const root = await mkdtemp(join(tmpdir(), "hub-readiness-"));
   let bundle = await embeddedDatabaseRuntime(root);
   await bundle.runtime.migrate();
@@ -206,6 +275,8 @@ on:
     filters: {from_users: ['*']}
   github.workflow_run_completed:
     filters: {from_users: ['*']}
+  github.pull_request_synchronized:
+    filters: {from_users: ['*']}
 run:
   target: {daemon: test, cwd: /tmp}
   agent: {provider: codex}
@@ -216,6 +287,7 @@ run:
       review: {from_user: 'reviewer[bot]', body_contains: 'review protocol'}
       feedback_from: ['reviewer[bot]', 'codex[bot]']
       required_workflows: [Coverage, Repository Checks]
+${withCompletionLabel ? "      completion_label: {name: ai-complete, color: '0E8A16', description: AI complete, review_body_contains: 'clean result'}" : ""}
   prompt: Repair
 `);
   const config = {
@@ -239,6 +311,11 @@ run:
           configurationStoreForProject: () => new ProjectConfigurationStore(database, project.id),
           reactions: { createReaction: async () => null, deleteReaction: async () => undefined },
           readPullRequest: () => remote.read(),
+          async syncCompletionLabel(_target, head, label, complete) {
+            if (remote.state.headSha !== head) return;
+            if (complete) remote.labels.add(label.name);
+            else remote.labels.delete(label.name);
+          },
         }),
       ],
       async dispatchLaunchMachineIntent(intent) {
@@ -254,18 +331,25 @@ run:
     get engine() {
       return engine;
     },
-    async deliver(type: "workflow_run" | "pull_request_review", head = "head") {
+    async deliver(
+      type: "workflow_run" | "pull_request_review" | "pull_request_synchronized",
+      head = "head",
+    ) {
       const id = randomUUID(),
         receivedAt = new Date();
       const payload = {
         id,
-        type,
+        type: type === "pull_request_synchronized" ? "pull_request" : type,
         repo: "owner/repo",
         repositoryId: 7,
         installationId: 42,
         createdAt: receivedAt.toISOString(),
         payload: {
-          action: type === "workflow_run" ? "completed" : "submitted",
+          action: {
+            workflow_run: "completed",
+            pull_request_review: "submitted",
+            pull_request_synchronized: "synchronize",
+          }[type],
           sender: { login: "reviewer[bot]" },
           pull_request: { number: 1053, head: { sha: head } },
           review: {
@@ -290,7 +374,7 @@ run:
         organizationId: "ready-org",
         projectId: project.id,
         deliveryId: id,
-        source: `github.${type}`,
+        source: type === "pull_request_synchronized" ? "github.pull_request" : `github.${type}`,
         payload,
         receivedAt,
       });

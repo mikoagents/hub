@@ -20,14 +20,86 @@ export interface PullRequestSnapshot {
     status: string;
     conclusion: string | null;
   }[];
+  // Only completion labeling requires external checks and commit statuses.
+  checks?: { status: string; conclusion: string | null }[];
+  statuses?: { state: string }[];
 }
 
 export interface PullRequestTarget {
   installationId: number;
   repository: string;
   number: number;
+  includeChecks?: boolean;
 }
 export type ReadPullRequest = (target: PullRequestTarget) => Promise<PullRequestSnapshot>;
+export type SyncCompletionLabel = (
+  target: PullRequestTarget,
+  headSha: string,
+  label: NonNullable<GitHubPullRequestPolicy["completion_label"]>,
+  complete: boolean,
+) => Promise<void>;
+
+export function pullRequestComplete(
+  snapshot: PullRequestSnapshot,
+  policy: GitHubPullRequestPolicy,
+): boolean {
+  const label = policy.completion_label;
+  if (label === undefined || !currentPullRequest(snapshot, snapshot.headSha)) return false;
+  const review = snapshot.reviews
+    .filter(
+      (item) =>
+        item.author === policy.review.from_user &&
+        item.headSha === snapshot.headSha &&
+        !["PENDING", "DISMISSED"].includes(item.state),
+    )
+    .sort((a, b) => b.id - a.id)[0];
+  if (
+    review === undefined ||
+    !review.body.includes(policy.review.body_contains) ||
+    !review.body.includes(label.review_body_contains) ||
+    review.body.includes("REVIEW INCOMPLETE")
+  )
+    return false;
+  if (snapshot.threads.some((thread) => !thread.resolved)) return false;
+  if (
+    readyPullRequestKey({ repository: "", number: 0 }, snapshot.headSha, policy, snapshot) !==
+    undefined
+  )
+    return false;
+  const latest = latestWorkflows(snapshot, snapshot.headSha);
+  return (
+    policy.required_workflows.every((name) => latest.some((run) => run.name === name)) &&
+    latest.every(
+      (run) =>
+        run.status === "completed" &&
+        ["success", "neutral", "skipped"].includes(run.conclusion ?? ""),
+    ) &&
+    snapshot.checks !== undefined &&
+    snapshot.checks.length > 0 &&
+    snapshot.checks.every(
+      (check) =>
+        check.status === "completed" &&
+        ["success", "neutral", "skipped"].includes(check.conclusion ?? ""),
+    ) &&
+    snapshot.statuses !== undefined &&
+    snapshot.statuses.every((status) => status.state === "success")
+  );
+}
+
+function latestWorkflows(snapshot: PullRequestSnapshot, head: string) {
+  const latest = new Map<number, PullRequestSnapshot["workflows"][number]>();
+  for (const run of snapshot.workflows) {
+    if (run.headSha !== head) continue;
+    const previous = latest.get(run.workflowId);
+    if (
+      previous === undefined ||
+      run.id > previous.id ||
+      (run.id === previous.id && run.attempt > previous.attempt)
+    )
+      latest.set(run.workflowId, run);
+  }
+  return [...latest.values()];
+}
 
 /** Equivalent review and CI deliveries share this identity before an execution is created. */
 export function readyPullRequestKey(
@@ -48,18 +120,7 @@ export function readyPullRequestKey(
     .sort((a, b) => b.id - a.id)[0];
   if (review === undefined || !review.body.includes(policy.review.body_contains)) return undefined;
 
-  const latest = new Map<number, PullRequestSnapshot["workflows"][number]>();
-  for (const run of snapshot.workflows) {
-    if (run.headSha !== expectedHead) continue;
-    const previous = latest.get(run.workflowId);
-    if (
-      previous === undefined ||
-      run.id > previous.id ||
-      (run.id === previous.id && run.attempt > previous.attempt)
-    )
-      latest.set(run.workflowId, run);
-  }
-  const workflows = [...latest.values()];
+  const workflows = latestWorkflows(snapshot, expectedHead);
   if (policy.required_workflows.some((name) => !workflows.some((run) => run.name === name)))
     return undefined;
   if (workflows.some((run) => run.status !== "completed" || run.conclusion === null))
@@ -87,7 +148,11 @@ export function readyPullRequestKey(
     target,
     head: expectedHead,
     base: snapshot.baseSha,
-    policy,
+    policy: {
+      review: policy.review,
+      feedback_from: policy.feedback_from,
+      required_workflows: policy.required_workflows,
+    },
     review: [review.id, review.body],
     threads: threads
       .map((thread) => [thread.id, thread.body])
@@ -115,6 +180,7 @@ export async function matchPullRequestReadiness(
   event: NormalizedGitHubEvent,
   policy: GitHubPullRequestPolicy,
   read: ReadPullRequest | undefined,
+  syncLabel?: SyncCompletionLabel,
 ): Promise<{ key: string; readiness: { number: number; headSha: string } } | undefined> {
   const classified = classifyGitHubEvent(event);
   const number = classified.item?.number;
@@ -130,6 +196,20 @@ export async function matchPullRequestReadiness(
   if (number == null || headSha == null) return undefined;
   if (read === undefined) throw new Error("GitHub readiness reader unavailable");
   const target = { installationId: event.installationId, repository: event.repo, number };
-  const key = readyPullRequestKey(target, headSha, policy, await read(target));
+  const snapshot = await read({
+    ...target,
+    ...(policy.completion_label === undefined ? {} : { includeChecks: true }),
+  });
+  if (!currentPullRequest(snapshot, headSha)) return undefined;
+  if (policy.completion_label !== undefined) {
+    if (syncLabel === undefined) throw new Error("GitHub completion label writer unavailable");
+    await syncLabel(
+      target,
+      headSha,
+      policy.completion_label,
+      pullRequestComplete(snapshot, policy),
+    );
+  }
+  const key = readyPullRequestKey(target, headSha, policy, snapshot);
   return key === undefined ? undefined : { key, readiness: { number, headSha } };
 }

@@ -34,6 +34,14 @@ it("user reads complete trusted feedback across GitHub pages without mixing head
         ["Repository Checks", 1, "success"],
       ],
     );
+    const complete = await read({
+      installationId: 42,
+      repository: "owner/repo",
+      number: 1053,
+      includeChecks: true,
+    });
+    assert.deepEqual(complete.checks, [{ status: "completed", conclusion: "success" }]);
+    assert.deepEqual(complete.statuses, [{ state: "success" }]);
     // A head changing between pages must not be treated as a coherent ready snapshot.
     remote.changedHead = true;
     await assert.rejects(
@@ -88,6 +96,19 @@ class GitHubApi {
     }
     const url = new URL(request.url ?? "/", this.origin);
     response.setHeader("content-type", "application/json");
+    if (url.pathname.endsWith("/check-runs")) {
+      response.end(
+        JSON.stringify({
+          total_count: 1,
+          check_runs: [{ status: "completed", conclusion: "success" }],
+        }),
+      );
+      return;
+    }
+    if (url.pathname.endsWith("/status")) {
+      response.end(JSON.stringify({ total_count: 1, statuses: [{ state: "success" }] }));
+      return;
+    }
     if (url.pathname === "/graphql") {
       let body = "";
       for await (const chunk of request) body += String(chunk);

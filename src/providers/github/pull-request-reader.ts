@@ -132,6 +132,40 @@ export function createPullRequestReader(
       status: run.status ?? "",
       conclusion: run.conclusion,
     }));
+    if (target.includeChecks) {
+      let checkCount = 0;
+      const [checks, statuses] = await Promise.all([
+        octokit.paginate(
+          "GET /repos/{owner}/{repo}/commits/{ref}/check-runs",
+          {
+            owner,
+            repo,
+            ref: headSha,
+            per_page: 100,
+            filter: "latest",
+          },
+          (response) => {
+            checkCount += response.data.length;
+            if (checkCount >= 1000)
+              throw new Error("GitHub completion check pagination limit exceeded");
+            return response.data;
+          },
+        ),
+        octokit.request("GET /repos/{owner}/{repo}/commits/{ref}/status", {
+          owner,
+          repo,
+          ref: headSha,
+          per_page: 100,
+        }),
+      ]);
+      if (checks.length >= 1000 || statuses.data.total_count > statuses.data.statuses.length)
+        throw new Error("GitHub completion checks pagination limit exceeded");
+      snapshot.checks = checks.map((check) => ({
+        status: check.status,
+        conclusion: check.conclusion,
+      }));
+      snapshot.statuses = statuses.data.statuses.map((status) => ({ state: status.state }));
+    }
     return snapshot;
   };
 }
@@ -144,11 +178,11 @@ function appendThreads(
 ): void {
   for (const thread of threads) {
     const first = thread.comments.nodes[0];
-    if (first?.author == null) continue;
+    if (first == null) throw new Error("GitHub review thread has no root comment");
     const author =
-      first.author.__typename === "Bot"
+      first.author?.__typename === "Bot"
         ? `${first.author.login.replace(/\[bot\]$/u, "")}[bot]`
-        : first.author.login;
+        : (first.author?.login ?? "");
     snapshot.threads.push({
       id: thread.id,
       author,

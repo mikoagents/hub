@@ -65,7 +65,7 @@ run:
       required_workflows: ["Coverage", "Repository Checks"]
 ```
 
-The policy is read-only and grants no agent authority. It requires an open, non-draft,
+Without `completion_label`, the policy is read-only and grants no agent authority. It requires an open, non-draft,
 same-repository PR at the event's exact head, and a submitted current-head review by the
 configured reviewer containing the configured text. Every named mandatory workflow must
 exist, and every currently known PR workflow at that head must be completed. Conditional
@@ -102,3 +102,43 @@ restart, genuinely new evidence, meter usage and stale queued work using real st
 a local GitHub API boundary, including pagination, bot identity and read failures. The
 same reader has also been checked read-only against a real GitHub PR; it does not prove a
 live coding-agent repair and push.
+
+## Completion labels without an agent
+
+The readiness policy can explicitly authorize one completion label on the event's PR:
+
+```yaml
+github_pull_request:
+  review: { from_user: "reviewer[bot]", body_contains: "<!-- review-protocol:2 -->" }
+  feedback_from: ["reviewer[bot]", "codex[bot]"]
+  required_workflows: ["Coverage", "Repository Checks"]
+  completion_label:
+    name: ai-complete
+    color: "0E8A16"
+    description: "AI review and repairs complete; human approval remains separate"
+    review_body_contains: "<!-- technical-review:pass -->"
+    exclusive_with: ["ai-failed", "ai-incomplete"]
+```
+
+The additional text must positively identify a completed, clean technical review; an
+incomplete review or merely waiting for a maintainer decision is insufficient. Hub also
+requires all inline discussions resolved, mandatory and known workflows completed without
+failure, at least one successful/nonblocking check, and no pending/failed checks or commit
+statuses. Missing evidence and API failures never imply completion. External check/status
+reads happen only when completion labeling is enabled. Oversized results fail closed.
+
+Subscribe the same trigger to `github.pull_request_synchronized` to invalidate old completion
+before the new head has a review. Review and workflow completion events reconcile the label
+regardless of arrival order. No workflow run or coding model is created for clean input.
+The configured field explicitly grants label-definition creation and association/removal
+authority, using the event's GitHub installation; the App needs Issues or Pull requests write.
+Only labels explicitly listed in `exclusive_with` are cleared when completion is applied;
+all other labels and human approvals remain independent. The completion setting does not alter
+the repair deduplication key, and it is absent by default.
+
+Writes recheck head and read back the resulting state; stale-head events leave a newer
+head's labels alone. GitHub does not offer conditional label writes, so concurrent changes
+can temporarily leave stale metadata until readback or the next event. There is no polling
+loop: only subscribed events reconcile changes, including a newly completed failing CI
+attempt or newly submitted review. Reopening a discussion or an external status change
+alone requires a later subscribed event to reconcile.

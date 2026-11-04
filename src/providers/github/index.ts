@@ -1,5 +1,6 @@
 import { createGitHubLifecycle } from "./lifecycle.js";
 import { createPullRequestReader } from "./pull-request-reader.js";
+import { createCompletionLabelWriter } from "./completion-label.js";
 import { createHash } from "node:crypto";
 import type { AuthServer } from "../../auth/server.js";
 import { createGitHubAuth, repositoryNamesForAccount, type GitHubAuth } from "../../auth/github.js";
@@ -254,6 +255,7 @@ export function createGitHubRegistration(
         configurationForProject = configurationStoreForProject;
         return createGitHubTriggerProvider({
           readPullRequest: createPullRequestReader(appAuth),
+          syncCompletionLabel: createCompletionLabelWriter(appAuth),
           async resolveWorkflowPullRequest(event) {
             const workflow = event.payload["workflow_run"];
             if (
