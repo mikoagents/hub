@@ -46,6 +46,10 @@ export type SyncCompletionLabel = (
   complete: boolean,
 ) => Promise<void>;
 
+function reviewSummary(body: string): string {
+  return body.split(/<details\b/iu, 1)[0] ?? "";
+}
+
 export function pullRequestComplete(
   snapshot: PullRequestSnapshot,
   policy: GitHubPullRequestPolicy,
@@ -63,8 +67,8 @@ export function pullRequestComplete(
   if (
     review === undefined ||
     !review.body.includes(policy.review.body_contains) ||
-    !review.body.includes(label.review_body_contains) ||
-    review.body.includes("REVIEW INCOMPLETE")
+    !reviewSummary(review.body).includes(label.review_body_contains) ||
+    reviewSummary(review.body).includes("REVIEW INCOMPLETE")
   )
     return false;
   if (snapshot.threads.some((thread) => !thread.resolved)) return false;
@@ -143,7 +147,7 @@ export function readyPullRequestKey(
       (item.state === "CHANGES_REQUESTED" ||
         (item.state !== "DISMISSED" &&
           item.state !== "PENDING" &&
-          item.body.includes("CHANGES REQUESTED"))),
+          reviewSummary(item.body).includes("CHANGES REQUESTED"))),
   );
   if (failed.length === 0 && !threads.some((thread) => !thread.resolved) && attention.length === 0)
     return undefined;

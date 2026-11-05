@@ -142,6 +142,11 @@ failure, at least one successful/nonblocking check, and no pending/failed checks
 statuses. Missing evidence and API failures never imply completion. External check/status
 reads happen only when completion labeling is enabled. Oversized results fail closed.
 
+Review summaries may be followed by a default-closed HTML `details` block for supporting
+evidence. Completion text and textual `CHANGES REQUESTED` / `REVIEW INCOMPLETE` verdicts
+are read from the summary before the first `details` block. Historical verdicts quoted
+inside that record do not start another repair or change the current completion result.
+
 Subscribe the same trigger to `github.pull_request_synchronized` to invalidate old completion
 before the new head has a review. Review and workflow completion events reconcile the label
 regardless of arrival order. No workflow run or coding model is created for clean input.
