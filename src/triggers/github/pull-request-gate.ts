@@ -23,6 +23,7 @@ export interface PullRequestSnapshot {
   // Only completion labeling requires external checks and commit statuses.
   checks?: { status: string; conclusion: string | null }[];
   statuses?: { state: string }[];
+  repairCommitCount?: number;
 }
 
 export interface PullRequestTarget {
@@ -30,6 +31,12 @@ export interface PullRequestTarget {
   repository: string;
   number: number;
   includeChecks?: boolean;
+  repairLimit?: GitHubPullRequestPolicy["repair_limit"];
+}
+export interface PullRequestReadiness {
+  number: number;
+  headSha: string;
+  repairLimit?: GitHubPullRequestPolicy["repair_limit"];
 }
 export type ReadPullRequest = (target: PullRequestTarget) => Promise<PullRequestSnapshot>;
 export type SyncCompletionLabel = (
@@ -176,12 +183,23 @@ export function currentPullRequest(snapshot: PullRequestSnapshot, expectedHead: 
   );
 }
 
+export function withinRepairLimit(
+  snapshot: PullRequestSnapshot,
+  limit: GitHubPullRequestPolicy["repair_limit"],
+): boolean {
+  return (
+    limit === undefined ||
+    (snapshot.repairCommitCount !== undefined &&
+      snapshot.repairCommitCount < limit.max_consecutive_commits)
+  );
+}
+
 export async function matchPullRequestReadiness(
   event: NormalizedGitHubEvent,
   policy: GitHubPullRequestPolicy,
   read: ReadPullRequest | undefined,
   syncLabel?: SyncCompletionLabel,
-): Promise<{ key: string; readiness: { number: number; headSha: string } } | undefined> {
+): Promise<{ key: string; readiness: PullRequestReadiness } | undefined> {
   const classified = classifyGitHubEvent(event);
   const number = classified.item?.number;
   const review = event.payload["review"];
@@ -199,6 +217,7 @@ export async function matchPullRequestReadiness(
   const snapshot = await read({
     ...target,
     ...(policy.completion_label === undefined ? {} : { includeChecks: true }),
+    ...(policy.repair_limit === undefined ? {} : { repairLimit: policy.repair_limit }),
   });
   if (!currentPullRequest(snapshot, headSha)) return undefined;
   if (policy.completion_label !== undefined) {
@@ -210,6 +229,16 @@ export async function matchPullRequestReadiness(
       pullRequestComplete(snapshot, policy),
     );
   }
+  if (!withinRepairLimit(snapshot, policy.repair_limit)) return undefined;
   const key = readyPullRequestKey(target, headSha, policy, snapshot);
-  return key === undefined ? undefined : { key, readiness: { number, headSha } };
+  return key === undefined
+    ? undefined
+    : {
+        key,
+        readiness: {
+          number,
+          headSha,
+          ...(policy.repair_limit === undefined ? {} : { repairLimit: policy.repair_limit }),
+        },
+      };
 }

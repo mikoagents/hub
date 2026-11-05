@@ -77,7 +77,53 @@ it("user fails closed when GitHub cannot supply complete repair evidence", async
   }
 });
 
+it("user bounds automatic repairs by exact first-parent commits and keeps human resets separate", async () => {
+  // Given a merge whose first-parent chain has three automation-authored commits.
+  const remote = await GitHubApi.start();
+  try {
+    remote.commits = {
+      head: {
+        sha: "head",
+        author: { login: "repairer[bot]" },
+        parents: [{ sha: "second" }, { sha: "human" }],
+      },
+      second: { sha: "second", author: { login: "repairer[bot]" }, parents: [{ sha: "third" }] },
+      third: { sha: "third", author: { login: "repairer[bot]" }, parents: [{ sha: "human" }] },
+    };
+    const target = {
+      installationId: 42,
+      repository: "owner/repo",
+      number: 1053,
+      repairLimit: { from_user: "repairer[bot]", max_consecutive_commits: 3 },
+    };
+    // When the production reader loads that PR through the actual HTTP transport.
+    const read = remote.reader();
+    assert.equal((await read(target)).repairCommitCount, 3);
+    remote.commits["second"]!.author = { login: "human" };
+    assert.equal((await read(target)).repairCommitCount, 1);
+    remote.commits["head"]!.author = { login: "human" };
+    assert.equal((await read(target)).repairCommitCount, 0);
+    // Then unlinked authors cannot reset the chain, and mismatched/error evidence fails closed.
+    remote.commits["head"]!.author = null;
+    assert.equal((await read(target)).repairCommitCount, undefined);
+    remote.commits["head"]!.sha = "different";
+    await assert.rejects(read(target), /identity mismatch/u);
+    remote.commits["head"]!.sha = "head";
+    remote.commits["head"]!.author = { login: "repairer[bot]" };
+    remote.commits["head"]!.parents = [];
+    assert.equal((await read(target)).repairCommitCount, 1);
+    remote.commits["head"]!.parents = [{ sha: "unavailable" }];
+    await assert.rejects(read(target));
+  } finally {
+    await remote.close();
+  }
+});
+
 class GitHubApi {
+  commits: Record<
+    string,
+    { sha: string; author: { login: string } | null; parents: { sha: string }[] }
+  > = {};
   changedHead = false;
   denied = false;
   brokenCursor = false;
@@ -96,6 +142,11 @@ class GitHubApi {
     }
     const url = new URL(request.url ?? "/", this.origin);
     response.setHeader("content-type", "application/json");
+    const commitRef = /^\/repos\/owner\/repo\/commits\/([^/]+)$/u.exec(url.pathname)?.[1];
+    if (commitRef !== undefined) {
+      this.sendCommit(commitRef, response);
+      return;
+    }
     if (url.pathname.endsWith("/check-runs")) {
       response.end(
         JSON.stringify({
@@ -165,6 +216,11 @@ class GitHubApi {
     }
     response.statusCode = 404;
     response.end(JSON.stringify({ message: "Not found" }));
+  }
+  private sendCommit(ref: string, response: ServerResponse) {
+    const commit = this.commits[ref];
+    response.statusCode = commit === undefined ? 404 : 200;
+    response.end(JSON.stringify(commit ?? { message: "Commit unavailable" }));
   }
   private threadPage(later: boolean) {
     return {

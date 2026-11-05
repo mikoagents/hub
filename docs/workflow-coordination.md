@@ -63,6 +63,9 @@ run:
         body_contains: "<!-- review-protocol:2 -->"
       feedback_from: ["reviewer[bot]", "codex[bot]"]
       required_workflows: ["Coverage", "Repository Checks"]
+      repair_limit:
+        from_user: "repairer[bot]"
+        max_consecutive_commits: 3
 ```
 
 Without `completion_label`, the policy is read-only and grants no agent authority. It requires an open, non-draft,
@@ -93,8 +96,20 @@ before an execution or meter unit is created. The database exclusion at executio
 remains authoritative; the earlier queue check avoids repeated GitHub reads while busy.
 Read failures propagate for durable retry and never fall back to a model. Review and thread
 pagination is bounded at 1,000 entries; Actions search truncation at 1,000 fails closed.
-This gate does not watch external checks/statuses independently or impose a repair-round
-budget. It consumes GitHub API requests; it does not consume model tokens while waiting.
+The optional `repair_limit` bounds consecutive commits authored by the configured GitHub
+account (1–20). The installation reads the exact head's first-parent chain, stopping at a
+different attributed author or the limit. A human-authored commit resets the count; a base
+update, review, CI rerun or trigger revision does not. This counts all commits by that account,
+not just commits carrying a workflow-specific trailer. An unlinked author cannot establish
+a reset and prevents repair dispatch until attribution is available. Read errors propagate.
+Hub checks the limit both at intake and immediately before model dispatch, without creating
+an execution or spending an execution meter unit when the limit is reached. Completion
+label reconciliation remains independent: exhausting the repair budget never turns findings
+into a pass. Omit the setting to retain unbounded commit rounds. It is a commit-chain limit,
+not a cost cap or a limit on distinct failed attempts without commits.
+
+This gate does not watch external checks/statuses independently. It consumes GitHub API
+requests; it does not consume model tokens while waiting.
 
 `github-readiness.integration.test.ts` covers pending and clean PRs, cross-source duplicates,
 restart, genuinely new evidence, meter usage and stale queued work using real storage.

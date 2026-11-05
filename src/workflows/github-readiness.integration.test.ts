@@ -9,6 +9,7 @@ import { createDatabase } from "../db/pg.js";
 import { ProjectConfigurationStore } from "../configuration/store.js";
 import { compileTriggerDocument } from "../triggers/configuration/index.js";
 import { createGitHubTriggerProvider } from "../triggers/github/provider.js";
+import type { PullRequestSnapshot } from "../triggers/github/pull-request-gate.js";
 import { composeEntitlements } from "../auth/entitlements.js";
 import { hashTemplate, UNLIMITED_TEMPLATE } from "../entitlements/catalog.js";
 import { DurableWorkflowEngine } from "./engine.js";
@@ -156,6 +157,64 @@ it("user sees a completion label only after clean review, resolved feedback and 
   }
 }, 60_000);
 
+it("user stops a repair chain before another execution or charge and resumes after a human commit", async () => {
+  // Given three automation commits with a confirmed unresolved finding and green CI.
+  const fixture = await readinessFixture(true, true);
+  try {
+    fixture.remote.state.repairCommitCount = 3;
+    fixture.remote.review();
+    fixture.remote.finding("remaining");
+    fixture.remote.finish("Coverage", "success");
+    fixture.remote.finish("Repository Checks", "success");
+    // When GitHub delivers reviews and new failed CI attempts, even across a restart.
+    await fixture.deliver("pull_request_review");
+    await fixture.restart();
+    fixture.remote.finish("Coverage", "failure", 2);
+    await fixture.deliver("workflow_run");
+    await fixture.engine.processAvailable();
+    // Then no model work or usage is created and the finding is not marked passed.
+    assert.equal(await fixture.runs(), 0);
+    assert.equal(await fixture.executions(), 0);
+    const usage = await fixture.runtime.query("select used from organization_usage");
+    assert.deepEqual(usage.rows, []);
+    assert.deepEqual([...fixture.remote.labels], ["needs-human-review"]);
+    assert.equal(fixture.remote.state.threads[0]!.resolved, false);
+
+    // A human-authored head resets the verified contiguous automation chain.
+    fixture.remote.state.headSha = "human-head";
+    fixture.remote.state.repairCommitCount = 0;
+    fixture.remote.review();
+    fixture.remote.finish("Coverage", "success");
+    fixture.remote.finish("Repository Checks", "success");
+    await fixture.deliver("pull_request_review", "human-head");
+    await fixture.engine.processAvailable();
+    assert.equal(await fixture.executions(), 1);
+  } finally {
+    await fixture.close();
+  }
+}, 60_000);
+
+it("user rechecks the repair limit before dispatching accepted work", async () => {
+  // Given repair input that was accepted while below the configured limit.
+  const fixture = await readinessFixture(false, true);
+  try {
+    fixture.remote.review();
+    fixture.remote.finding("remaining");
+    fixture.remote.finish("Coverage", "success");
+    fixture.remote.finish("Repository Checks", "success");
+    await fixture.deliver("pull_request_review");
+    // When the final remote commit attribution is unavailable before dispatch.
+    delete fixture.remote.state.repairCommitCount;
+    await fixture.engine.processAvailable();
+    // Then Hub fails closed without a model execution or execution meter charge.
+    assert.equal(await fixture.executions(), 0);
+    const steps = await fixture.runtime.query("select status from workflow_step_runs");
+    assert.deepEqual(steps.rows, [{ status: "skipped" }]);
+  } finally {
+    await fixture.close();
+  }
+}, 60_000);
+
 it("user never retains completion after new feedback, failed checks or incomplete review", async () => {
   const fixture = await readinessFixture(true);
   try {
@@ -193,12 +252,13 @@ it("user never retains completion after new feedback, failed checks or incomplet
 
 class GitHubPullRequest {
   labels = new Set(["needs-human-review"]);
-  state = {
+  state: PullRequestSnapshot & Required<Pick<PullRequestSnapshot, "checks" | "statuses">> = {
     state: "OPEN",
     isDraft: false,
     headSha: "head",
     baseSha: "base",
     sameRepository: true,
+    repairCommitCount: 0,
     checks: [{ status: "completed", conclusion: "success" as string | null }],
     statuses: [] as { state: string }[],
     reviews: [] as { id: number; author: string; headSha: string; state: string; body: string }[],
@@ -243,7 +303,7 @@ class GitHubPullRequest {
   }
 }
 
-async function readinessFixture(withCompletionLabel = false) {
+async function readinessFixture(withCompletionLabel = false, withRepairLimit = false) {
   const root = await mkdtemp(join(tmpdir(), "hub-readiness-"));
   let bundle = await embeddedDatabaseRuntime(root);
   await bundle.runtime.migrate();
@@ -287,6 +347,7 @@ run:
       review: {from_user: 'reviewer[bot]', body_contains: 'review protocol'}
       feedback_from: ['reviewer[bot]', 'codex[bot]']
       required_workflows: [Coverage, Repository Checks]
+${withRepairLimit ? "      repair_limit: {from_user: 'repairer[bot]', max_consecutive_commits: 3}" : ""}
 ${withCompletionLabel ? "      completion_label: {name: ai-complete, color: '0E8A16', description: AI complete, review_body_contains: 'clean result'}" : ""}
   prompt: Repair
 `);

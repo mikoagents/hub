@@ -11,6 +11,13 @@ export const GitHubPullRequestPolicySchema = z
       .strict(),
     feedback_from: z.array(z.string().min(1)).min(1),
     required_workflows: z.array(z.string().min(1)).min(1),
+    repair_limit: z
+      .object({
+        from_user: z.string().min(1),
+        max_consecutive_commits: z.number().int().min(1).max(20),
+      })
+      .strict()
+      .optional(),
     completion_label: z
       .object({
         name: z.string().min(1).max(50),

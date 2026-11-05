@@ -4,6 +4,7 @@ import type {
   PullRequestSnapshot,
   ReadPullRequest,
 } from "../../triggers/github/pull-request-gate.js";
+import { repairCommitEvidence } from "./repair-commits.js";
 
 const AuthorSchema = z.object({ login: z.string(), __typename: z.string() }).nullable();
 const ThreadPageSchema = z.object({
@@ -166,6 +167,10 @@ export function createPullRequestReader(
       }));
       snapshot.statuses = statuses.data.statuses.map((status) => ({ state: status.state }));
     }
+    Object.assign(
+      snapshot,
+      await repairCommitEvidence(octokit, owner, repo, headSha, target.repairLimit),
+    );
     return snapshot;
   };
 }

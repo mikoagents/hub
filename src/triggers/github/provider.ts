@@ -32,6 +32,8 @@ import { completedWorkflowRun, githubEventKey } from "./workflow-run.js";
 import {
   currentPullRequest,
   matchPullRequestReadiness,
+  withinRepairLimit,
+  type PullRequestReadiness,
   type ReadPullRequest,
   type SyncCompletionLabel,
 } from "./pull-request-gate.js";
@@ -166,7 +168,7 @@ export type GitHubReactionSubject =
   | { kind: "pull_request_review_comment"; commentId: number };
 
 export interface GitHubTriggerContext {
-  readiness?: { number: number; headSha: string };
+  readiness?: PullRequestReadiness;
   provider: "github";
   organizationId: string;
   target: { installationId: number; repository: string };
@@ -299,8 +301,14 @@ export function createGitHubTriggerProvider(options: {
       const snapshot = await options.readPullRequest({
         ...context.target,
         number: context.readiness.number,
+        ...(context.readiness.repairLimit === undefined
+          ? {}
+          : { repairLimit: context.readiness.repairLimit }),
       });
-      return currentPullRequest(snapshot, context.readiness.headSha);
+      return (
+        currentPullRequest(snapshot, context.readiness.headSha) &&
+        withinRepairLimit(snapshot, context.readiness.repairLimit)
+      );
     },
     async materializeContext(launch) {
       return launch.triggerContext.event;
