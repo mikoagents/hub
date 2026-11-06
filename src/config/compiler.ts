@@ -93,6 +93,8 @@ const AuthoredTriggerFilterSchema = z
     label: z.string().min(1).optional(),
     labels: z.array(z.string().min(1)).min(1).optional(),
     repo: z.string().min(1).optional(),
+    /** Match only PR events with an explicit draft status. */
+    draft: z.boolean().optional(),
     guild: z.string().min(1).optional(),
     workspace: z.string().min(1).optional(),
     /** A Linear project UUID. It is deliberately a string so imported Linear IDs work verbatim. */

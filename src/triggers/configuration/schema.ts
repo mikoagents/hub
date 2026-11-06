@@ -42,6 +42,7 @@ export const TriggerFilterSchema = z
     label: z.string().min(1).optional(),
     labels: z.array(z.string().min(1)).min(1).optional(),
     repo: z.string().min(1).optional(),
+    draft: z.boolean().optional(),
     guild: z.string().min(1).optional(),
     workspace: z.string().min(1).optional(),
     project: z.string().min(1).optional(),

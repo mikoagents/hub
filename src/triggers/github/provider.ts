@@ -325,6 +325,15 @@ export function createGitHubTriggerProvider(options: {
       return reaction === null ? null : ({ reactionId: reaction.id } satisfies GitHubReactionState);
     },
     async onAgentExecutionCompleted(triggerContext, _outputContext, _result, reactionState) {
+      // Older accepted draft runs may still finish after draft filtering is enabled.
+      if (triggerContext.event.github?.pull_request?.draft === true) {
+        await deletePreviousReaction(
+          options.reactions,
+          triggerContext,
+          githubReactionId(reactionState),
+        );
+        return null;
+      }
       return reactToLifecycle(options.reactions, triggerContext, "+1", reactionState);
     },
     async onAgentExecutionFailed(triggerContext, _outputContext, reason, reactionState) {

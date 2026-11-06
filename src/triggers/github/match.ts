@@ -83,6 +83,10 @@ function matchesFilter(
     return false;
   }
 
+  if (filter.draft !== undefined && classified.pullRequest?.draft !== filter.draft) {
+    return false;
+  }
+
   const resourceId = filter["resourceId"];
   if (typeof resourceId === "string" && resourceId !== String(event.repositoryId)) {
     return false;

@@ -49,6 +49,13 @@ logical attempt identity. These tests do not prove a live GitHub-to-coding-agent
 
 ## Avoiding unnecessary agent executions
 
+PR review triggers can set `filters: { from_users: ['*'], draft: false }` on their
+created, synchronized and ready events. Draft events are then rejected before a run,
+agent or reaction is created; missing draft metadata also fails that filter. Omit
+`draft` to keep accepting both states, or use `draft: true` for draft-specific work.
+Older already-accepted draft runs remove their progress reaction when they finish
+without adding a completion thumbs-up. A skipped draft does not establish a completed review.
+
 Event deduplication alone cannot combine independent workflow completions and review
 notifications. Opt in to a deterministic GitHub readiness gate and state deduplication:
 
