@@ -1,4 +1,5 @@
 import { continuationKey } from "../triggers/continuation.js";
+import { iterationDeadlinePrompt } from "./iterations.js";
 import { DatabaseUnavailableError } from "../db/errors.js";
 import type {
   AgentExecutionRecord,
@@ -1039,11 +1040,12 @@ function buildStepIntent(
       ...(step.title === undefined
         ? {}
         : { title: renderExecutionTemplate(step.title, executionId) }),
-      prompt: step.prompt
-        .map((block) =>
-          renderExpressionTemplate(block.kind === "text" ? block.value : block.content, context),
-        )
-        .join("\n"),
+      prompt:
+        step.prompt
+          .map((block) =>
+            renderExpressionTemplate(block.kind === "text" ? block.value : block.content, context),
+          )
+          .join("\n") + iterationDeadlinePrompt(step.iteration, deadlineAt, step.maxRuntimeMs),
       agent,
       allowOutputs: step.allowOutputs,
       timeoutMs: step.maxRuntimeMs,

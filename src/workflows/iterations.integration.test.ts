@@ -32,6 +32,18 @@ describe("user resumes unfinished repairs through the persisted Hub workflow", (
     assert.equal(started.status, 200);
     await hub.waitForCreatedAgentRequests(1);
     const first = await hub.waitForPendingExecution();
+    // The model's arrival can lag dispatch; its handoff must use Hub's existing deadline.
+    assert.ok(first.deadlineAt);
+    assert.equal(
+      first.launchIntent?.prompt.includes(`Hub hard deadline: ${first.deadlineAt.toISOString()}`),
+      true,
+    );
+    assert.equal(
+      first.launchIntent?.prompt.includes(
+        `Handoff deadline: ${new Date(first.deadlineAt.getTime() - 10 * 60_000).toISOString()}`,
+      ),
+      true,
+    );
     const checkpoint = "candidate tree abc; coverage 65%; finish photo cancellation scenarios";
     // When the agent yields and Hub restarts before the whole repair is complete.
     const yielded = await hub.callSessionTool(first.id, "finish_execution", {

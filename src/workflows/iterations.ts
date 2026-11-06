@@ -11,6 +11,17 @@ export const IterationSchema = z
   .refine((value) => value.index <= value.limit, "Iteration exceeds its limit");
 export type Iteration = z.infer<typeof IterationSchema>;
 
+export function iterationDeadlinePrompt(
+  iteration: Iteration | undefined,
+  deadlineAt: Date,
+  maxRuntimeMs: number,
+): string {
+  if (iteration === undefined) return "";
+  const reserveMs = Math.min(10 * 60_000, Math.floor(maxRuntimeMs / 5));
+  const handoffAt = new Date(deadlineAt.getTime() - reserveMs);
+  return `\nHub hard deadline: ${deadlineAt.toISOString()}\nHandoff deadline: ${handoffAt.toISOString()}\nThese absolute times include agent startup and prompt delivery. Do not restart the runtime budget from your local start time. By the handoff deadline, stop further repair commands, save the exact candidate and evidence, release owned resources, and call finish_execution with the required output. Publish progress early; do not postpone the completion callback for a final status reread.`;
+}
+
 const BlockerSchema = z
   .object({
     kind: z.enum(["permission", "human_decision", "hardware", "external_service"]),

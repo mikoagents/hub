@@ -159,6 +159,12 @@ This contract records agent-reported evidence; it does not prove a blocker or in
 arbitrary workspace for the agent. Abrupt termination before a checkpoint is saved remains
 a failure and must not silently authorize unknown dirty work.
 
+Each iterative prompt includes Hub's absolute execution deadline and an earlier handoff
+deadline, reserving 20% of the segment budget, capped at ten minutes. The hard deadline
+includes agent startup and prompt delivery; agents must not restart the clock when they
+receive the prompt. Save evidence, release owned resources and send the completion callback
+by the handoff deadline, before spending time on a final status reread.
+
 Validation: `iterations.integration.test.ts` exercises installation, authenticated MCP
 completion, fresh session credentials, durable restart, deduplication and real blocker status
 using PostgreSQL and the production workflow engine. The external Paseo agent transport is a
