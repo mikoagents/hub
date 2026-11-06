@@ -8,6 +8,7 @@ import {
   type CompiledTrigger,
 } from "../../config/compiler.js";
 import { TriggerDocumentSchema, type TriggerDocument } from "./schema.js";
+import { iterationSteps } from "../../workflows/iterations.js";
 
 export { TriggerDocumentSchema, type TriggerDocument } from "./schema.js";
 export {
@@ -66,26 +67,7 @@ export function compileTriggerDocument(yaml: string): CompiledTriggerDocument {
       on: event,
       max_runtime: authored.max_runtime ?? authored.run.max_runtime,
       filters: authoredFilters(event, definition),
-      steps: [
-        {
-          id: "run",
-          environment: "target",
-          max_runtime: authored.run.max_runtime,
-          idle_timeout: authored.run.idle_timeout,
-          ...(authored.run.startup_timeout === undefined
-            ? {}
-            : { startup_timeout: authored.run.startup_timeout }),
-          agent,
-          ...(authored.run.title === undefined ? {} : { title: authored.run.title }),
-          prompt: [{ text: authored.run.prompt }],
-          ...(authored.run.env === undefined ? {} : { env: authored.run.env }),
-          ...(authored.run.github === undefined ? {} : { github: authored.run.github }),
-          ...(authored.run.output === undefined ? {} : { output: authored.run.output }),
-          ...(allowOutputs.length === 0 ? {} : { allow_outputs: allowOutputs }),
-          auto_archive: authored.run.auto_archive,
-          background: authored.run.background,
-        },
-      ],
+      steps: authoredRunSteps(authored.run, agent, allowOutputs),
     };
     if (authored.inputs !== undefined) compiledTrigger.inputs = authored.inputs;
     triggers.push(compiledTrigger);
@@ -114,11 +96,41 @@ export function compileTriggerDocument(yaml: string): CompiledTriggerDocument {
     events: compiled.triggers.map((trigger) =>
       withAutomaticReply({
         ...trigger,
-        steps: trigger.steps.map((step) => ({ ...step, continuation: authored.run.continuation })),
+        steps: trigger.steps.map((step, ordinal) => ({
+          ...step,
+          continuation: authored.run.continuation,
+          ...(authored.run.iterations === undefined
+            ? {}
+            : { iteration: { index: ordinal + 1, limit: authored.run.iterations.max_runs } }),
+        })),
       }),
     ),
     authoredHash: createHash("sha256").update(yaml).digest("hex"),
   };
+}
+
+function authoredRunSteps(
+  run: TriggerDocument["run"],
+  agent: AuthoredStep["agent"],
+  allowOutputs: NonNullable<AuthoredStep["allow_outputs"]>,
+): AuthoredStep[] {
+  const step: AuthoredStep = {
+    id: "run",
+    environment: "target",
+    max_runtime: run.max_runtime,
+    idle_timeout: run.idle_timeout,
+    ...(run.startup_timeout === undefined ? {} : { startup_timeout: run.startup_timeout }),
+    agent,
+    ...(run.title === undefined ? {} : { title: run.title }),
+    prompt: [{ text: run.prompt }],
+    ...(run.env === undefined ? {} : { env: run.env }),
+    ...(run.github === undefined ? {} : { github: run.github }),
+    ...(run.output === undefined ? {} : { output: run.output }),
+    ...(allowOutputs.length === 0 ? {} : { allow_outputs: allowOutputs }),
+    auto_archive: run.auto_archive,
+    background: run.background,
+  };
+  return run.iterations === undefined ? [step] : iterationSteps(step, run.iterations.max_runs);
 }
 
 function withAutomaticReply(trigger: CompiledTrigger): CompiledTrigger {

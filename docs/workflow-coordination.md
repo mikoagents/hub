@@ -125,6 +125,45 @@ a local GitHub API boundary, including pagination, bot identity and read failure
 same reader has also been checked read-only against a real GitHub PR; it does not prove a
 live coding-agent repair and push.
 
+## Continuing unfinished work
+
+Opt in to checkpointed execution segments when a repair may outlive one agent or credential:
+
+```yaml
+max_runtime: 12h
+run:
+  iterations: { max_runs: 12 }
+  continuation: { mode: new }
+  max_runtime: 50m
+```
+
+The explicit whole-run deadline and segment count bound resource use. Each segment receives
+a new session and execution authority. The original durable run retains its event/state claim
+and conversation serialization; continuing does not require another webhook. Pending segments
+and structured checkpoints survive restart. A new segment still passes provider readiness
+checks, so stale heads and newly ineligible PRs do not continue editing.
+
+Iterative runs own the `finish_execution` output contract and cannot also set `run.output`.
+Return `{outcome: "continue", checkpoint: "..."}` while fixable code, test, compilation or coverage
+work remains. Save the exact candidate identity, verification evidence and next work in the
+checkpoint; the next segment receives that text. Return `complete` only when the requested
+work is finished. Later segments are skipped. The last segment cannot return `continue` and
+cannot record unfinished work as success; an uncompleted final segment remains subject to its
+deadline. Keep checkpoints current before long operations and reserve time to yield.
+
+An external dependency can use `blocked` only with a `blocker` containing `kind` (`permission`,
+`human_decision`, `hardware` or `external_service`) and an evidence-based `reason`. This finishes
+the MCP callback while marking the execution and workflow failed, rather than issuing a
+successful completion reaction. Test and coverage failures are not external blocker kinds.
+This contract records agent-reported evidence; it does not prove a blocker or inspect an
+arbitrary workspace for the agent. Abrupt termination before a checkpoint is saved remains
+a failure and must not silently authorize unknown dirty work.
+
+Validation: `iterations.integration.test.ts` exercises installation, authenticated MCP
+completion, fresh session credentials, durable restart, deduplication and real blocker status
+using PostgreSQL and the production workflow engine. The external Paseo agent transport is a
+boundary harness; the test does not claim a real model repaired a PR.
+
 ## Completion labels without an agent
 
 The readiness policy can explicitly authorize one completion label on the event's PR:

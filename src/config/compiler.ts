@@ -1,5 +1,6 @@
 import { eventDefinition, isEditorEvent } from "../triggers/configuration/events.js";
 import { ContinuationSchema } from "../triggers/continuation.js";
+import { IterationSchema, type Iteration } from "../workflows/iterations.js";
 import { CoordinationSchema, type Coordination } from "../workflows/coordination.js";
 import { createHash } from "node:crypto";
 import { z } from "zod";
@@ -248,6 +249,7 @@ export interface CompiledInput {
 }
 
 export interface CompiledStep {
+  iteration?: Iteration | undefined;
   continuation?: import("../triggers/continuation.js").Continuation | undefined;
   id: string;
   environment: string;
@@ -401,6 +403,7 @@ const CompiledJsonSchemaSchema = z.custom<JsonValue>(
 
 const CompiledStepSchema: z.ZodType<CompiledStep> = z
   .object({
+    iteration: IterationSchema.optional(),
     continuation: ContinuationSchema.optional(),
     id: z.string().regex(IDENTIFIER),
     environment: z.string().min(1),

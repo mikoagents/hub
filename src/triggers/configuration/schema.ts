@@ -2,6 +2,7 @@ import { RecurrenceSchema } from "../schedule/recurrence.js";
 import { z } from "zod";
 import { ContinuationSchema } from "../continuation.js";
 import { CoordinationSchema } from "../../workflows/coordination.js";
+import { IterationsSchema } from "../../workflows/iterations.js";
 import { eventDefinition, isEditorEvent } from "./events.js";
 import { AuthoredGitHubAuthoritySchema } from "../../config/github-authority.js";
 
@@ -101,6 +102,7 @@ export const TriggerOutputSchema = z
 export const TriggerRunSchema = z
   .object({
     coordination: CoordinationSchema.optional(),
+    iterations: IterationsSchema.optional(),
     target: TriggerTargetSchema,
     agent: TriggerAgentSelectionSchema,
     continuation: ContinuationSchema.default({ mode: "conversation" }),
@@ -122,6 +124,39 @@ export const TriggerRunSchema = z
   })
   .strict();
 
+function validateIterations(
+  trigger: {
+    max_runtime?: string | undefined;
+    run: {
+      iterations?: { max_runs: number } | undefined;
+      output?: unknown;
+      continuation: { mode: string };
+    };
+  },
+  context: z.RefinementCtx,
+): void {
+  if (trigger.run.iterations !== undefined) {
+    if (trigger.max_runtime === undefined)
+      context.addIssue({
+        code: "custom",
+        path: ["max_runtime"],
+        message: "Iterative runs require a whole-run deadline.",
+      });
+    if (trigger.run.output !== undefined)
+      context.addIssue({
+        code: "custom",
+        path: ["run", "output"],
+        message: "Iterative runs use the outcome/checkpoint completion contract.",
+      });
+    if (trigger.run.continuation.mode !== "new")
+      context.addIssue({
+        code: "custom",
+        path: ["run", "continuation"],
+        message: "Iterative runs require a new agent session for each segment.",
+      });
+  }
+}
+
 export const TriggerDocumentSchema = z
   .object({
     name: z.string().regex(IDENTIFIER),
@@ -133,6 +168,7 @@ export const TriggerDocumentSchema = z
     run: TriggerRunSchema,
   })
   .strict()
+  .superRefine(validateIterations)
   .superRefine((trigger, context) => {
     for (const [event, definition] of Object.entries(trigger.on)) {
       if (event === "schedule.tick") {

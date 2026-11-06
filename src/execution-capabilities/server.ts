@@ -11,6 +11,7 @@ import type { AgentExecutionRecord, Database } from "../db/types.js";
 import { registerResponseLifecycle } from "../http/response-lifecycle.js";
 import { reportFailure, withReference } from "../failures/index.js";
 import { compileJsonSchema, formatJsonSchemaErrors } from "../workflows/json-schema.js";
+import { iterationFailure } from "../workflows/iterations.js";
 import {
   executionToolDefinitions,
   finishExecutionToolName,
@@ -275,7 +276,11 @@ async function finishExecutionCall(
       token,
       ...(output === undefined ? {} : { output }),
     });
-    if (completed.status !== "succeeded") {
+    const expectedStatus =
+      iterationFailure(execution.launchIntent?.iteration, output) === undefined
+        ? "succeeded"
+        : "failed";
+    if (completed.status !== expectedStatus) {
       reportFailure(
         new Error(`execution completion ended with status ${completed.status}`),
         {
@@ -294,7 +299,11 @@ async function finishExecutionCall(
       status: "completed",
       observedAt: options.now?.() ?? new Date(),
     });
-    return toolSuccess("Execution finished");
+    return toolSuccess(
+      expectedStatus === "failed"
+        ? "Execution paused for external intervention"
+        : "Execution finished",
+    );
   } catch (error) {
     const failure = reportFailure(error, {
       operation: "execution_capability.finish",

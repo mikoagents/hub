@@ -1074,6 +1074,7 @@ function buildStepIntent(
           },
         }),
     workflowStepRunId: stepRunId,
+    ...(step.iteration === undefined ? {} : { iteration: step.iteration }),
     ...(step.output === undefined ? {} : { outputSchema: step.output.schema }),
     deadlineAt,
   };

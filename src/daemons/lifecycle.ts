@@ -28,6 +28,7 @@ import {
 import { logger as defaultLogger } from "../logger.js";
 import { MAX_EXPLICIT_AGENT_TITLE_CHARS } from "@getpaseo/protocol/agent-title-limits";
 import { reportFailure } from "../failures/index.js";
+import { iterationFailure } from "../workflows/iterations.js";
 import type { TriggerProvider } from "../triggers/index.js";
 import type { ExecutionAuthority } from "../execution-authority/index.js";
 import { OutputExecutorRegistry } from "../execution-capabilities/outputs.js";
@@ -893,7 +894,11 @@ export class DaemonDispatchLifecycle {
     if (options.deferHubAction === true && execution.hubAction === "archive") {
       await this.reconcileHubActionSafely(execution);
     }
-    if (execution.status !== "succeeded") {
+    const expectedStatus =
+      iterationFailure(currentExecution.launchIntent?.iteration, input.output) === undefined
+        ? "succeeded"
+        : "failed";
+    if (execution.status !== expectedStatus) {
       throw new AgentExecutionCompletionFailure("expired");
     }
     return execution;
@@ -1126,19 +1131,26 @@ export class DaemonDispatchLifecycle {
       existing.launchIntent?.outputSchema === undefined || options.output === undefined
         ? undefined
         : jsonValue(options.output);
+    const failureReason = iterationFailure(existing.launchIntent?.iteration, options.output);
+    const status = failureReason === undefined ? "succeeded" : "failed";
     const transition = await this.transitionTerminalAgentExecution(
       executionId,
-      "succeeded",
+      status,
       {
         result:
           structuredOutput === undefined
-            ? { status: "succeeded" }
-            : { status: "succeeded", output: options.output },
+            ? { status }
+            : {
+                status,
+                output: options.output,
+                ...(failureReason === undefined ? {} : { reason: failureReason }),
+              },
         completedByAgent: options.completedByAgent === true,
       },
       {
-        stepStatus: "succeeded",
+        stepStatus: status,
         stepOutput: structuredOutput,
+        ...(failureReason === undefined ? {} : { failureReason }),
       },
     );
     if (!transition.transitioned) {

@@ -3,6 +3,7 @@ import type { TriggerAgentConfig } from "../triggers/index.js";
 import type { WorktreeTarget } from "../config/index.js";
 import type { JsonValue } from "../config/compiler.js";
 import type { CompiledGitHubAuthority } from "../config/github-authority.js";
+import type { Iteration } from "../workflows/iterations.js";
 
 export const DEFAULT_STARTUP_TIMEOUT_MS = 120_000;
 
@@ -16,6 +17,7 @@ export interface DaemonEnvironmentTarget {
 }
 
 export interface LaunchMachineIntent {
+  iteration?: Iteration;
   continuation?: { key: string | null; compatibility: unknown };
   kind: "launch_machine";
   organizationId: string;
