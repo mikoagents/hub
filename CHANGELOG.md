@@ -17,6 +17,10 @@
 
 - Unhandled provider event receipts expire automatically after seven days on every instance. Receipts routed to a trigger or still referenced by a run or attachment remain available.
 
+### Fixed
+
+- Secondary text remains readable on hovered surfaces in light appearance.
+
 ## 0.11.0 - 2026-10-25
 
 ### Added
