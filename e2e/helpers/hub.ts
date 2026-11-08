@@ -4110,11 +4110,13 @@ class HubUser {
   }
 
   /**
-   * The footer's stops after the destinations: Help, then the account menu. The execution meter
-   * and its upgrade link precede Help on a metered organization, which this harness never is —
-   * the browser fixtures that configure billing do not drive the sidebar by keyboard.
+   * The footer's stops after the destinations: Appearance, Help, then the account menu. The
+   * execution meter and its upgrade link precede Appearance on metered organizations. This
+   * harness is never metered; billing fixtures do not drive the sidebar by keyboard.
    */
   private async tabThroughSidebarFooter(): Promise<void> {
+    await this.page.keyboard.press("Tab");
+    await expect(this.page.getByRole("button", { name: "Appearance", exact: true })).toBeFocused();
     await this.page.keyboard.press("Tab");
     await expect(this.page.getByRole("button", { name: "Help", exact: true })).toBeFocused();
     await this.page.keyboard.press("Tab");

@@ -8,6 +8,6 @@ pre-commit:
       run: npm run format:check:files -- {staged_files}
     - name: lint
       glob: "*.{js,jsx,ts,tsx}"
-      run: npm run lint -- {staged_files}
+      run: npm run lint
     - name: typecheck
       run: npm run typecheck
