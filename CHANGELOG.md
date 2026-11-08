@@ -4,6 +4,7 @@
 
 ### Added
 
+- Status filters on the Triggers table, with the selected status remembered for each organization.
 - Light and dark appearance options, with a saved browser preference and automatic system theme support.
 - Opt-in GitHub PR readiness and `provider_state` deduplication combine review and CI notifications before starting an agent, skipping pending, clean and obsolete work without model tokens.
 - `github.workflow_run_completed` starts PR follow-up work after a CI workflow attempt finishes, with the head SHA and attempt in context.
