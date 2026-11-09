@@ -1,3 +1,4 @@
+import { EXECUTION_PROTOCOL_VERSION as version } from "../../miko/protocol.js";
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
@@ -39,8 +40,8 @@ export class HubFaultProxy {
       void this.forwardHttp(request, response);
     });
     this.sockets.on("headers", (headers, request) => {
-      if (request.headers["x-paseo-session-protocol"] === "1") {
-        headers.push("x-paseo-session-protocol: 1");
+      if (request.headers["x-miko-execution-protocol"] === version) {
+        headers.push(`x-miko-execution-protocol: ${version}`);
       }
     });
     this.server.on("upgrade", (request, socket, head) => this.upgrade(request, socket, head));
@@ -95,8 +96,11 @@ export class HubFaultProxy {
     });
     socket.send(
       JSON.stringify({
-        type: "session",
-        message: { type: "get_providers_snapshot_request", requestId, cwd },
+        type: "miko.request",
+        version,
+        operation: "providers",
+        requestId,
+        input: { cwd },
       }),
     );
     return observed;
@@ -123,8 +127,15 @@ export class HubFaultProxy {
     });
     socket.send(
       JSON.stringify({
-        type: "session",
-        message,
+        type: "miko.request",
+        version,
+        requestId: message["requestId"],
+        operation: message["type"] === "send_agent_message_request" ? "submit" : message["type"],
+        input: {
+          agentId: message["agentId"],
+          messageId: "unrelated-native-reference",
+          text: message["text"],
+        },
       }),
     );
     return observed;
@@ -253,13 +264,14 @@ export class HubFaultProxy {
   }
 
   private observeHubMessage(raw: string): void {
-    const message = sessionMessage(parseRecord(raw));
-    if (message?.["type"] !== "create_agent_request") return;
-    const config = recordAt(message, "config");
-    const servers = config && recordAt(config, "mcpServers");
-    const hub = servers && recordAt(servers, "hub");
-    const url = hub && readString(hub, "url");
-    const requestId = readString(message, "requestId");
+    const message = parseRecord(raw);
+    if (message?.["operation"] !== "create") return;
+    const input = recordAt(message, "input"),
+      options = input && recordAt(input, "options"),
+      servers = options && recordAt(options, "mcpServers"),
+      hub = servers && recordAt(servers, "hub");
+    const url = hub && readString(hub, "url"),
+      requestId = readString(message, "requestId");
     if (!url || !requestId) return;
     const path = new URL(url).pathname.split("/");
     if (path[1] !== "agent-executions" || !path[2]) return;
@@ -267,80 +279,49 @@ export class HubFaultProxy {
     this.creationExecutions.set(requestId, executionId);
     this.createsByExecution.set(executionId, (this.createsByExecution.get(executionId) ?? 0) + 1);
   }
-
   private observeDaemonMessage(data: RawData): boolean {
-    const raw = readText(data);
-    const message = sessionMessage(parseRecord(raw));
-    this.recordDaemonEvidence(message);
-    this.observeDenial(message);
-    this.observeProviderSnapshot(message);
-    return this.observeCreateResponse(message);
-  }
-
-  private observeProviderSnapshot(message: Record<string, unknown> | undefined): void {
-    if (message?.["type"] !== "get_providers_snapshot_response") return;
-    const payload = recordAt(message, "payload");
-    if (payload === undefined) return;
-    this.providerSnapshot?.(payload);
-    this.providerSnapshot = undefined;
-  }
-
-  private recordDaemonEvidence(message: Record<string, unknown> | undefined): void {
-    if (
-      typeof message?.["type"] === "string" &&
-      (message["type"].startsWith("hub.") || message["type"] === "rpc_error")
-    ) {
-      const payload = recordAt(message, "payload");
-      const event = payload && recordAt(payload, "event");
-      const item = event && recordAt(event, "item");
-      const requestId = payload && readString(payload, "requestId");
-      this.events.push(
-        `daemon message ${message["type"]}${requestId ? ` request=${requestId}` : ""}${
-          message["type"] === "rpc_error" ? ` payload=${JSON.stringify(payload)}` : ""
-        }${event ? ` event=${String(event["type"])}` : ""}${
-          item ? ` item=${JSON.stringify(item)}` : ""
-        }`,
-      );
-    }
-  }
-
-  private observeDenial(message: Record<string, unknown> | undefined): void {
-    if (message?.["type"] === "rpc_error") {
-      const payload = recordAt(message, "payload");
-      const requestType = payload && readString(payload, "requestType");
-      const code = payload && readString(payload, "code");
-      this.events.push(`denial observed handler=${String(this.denial !== undefined)}`);
-      if (requestType && code) {
-        this.denial?.({ type: "rpc_error", requestType, code });
+    const message = parseRecord(readText(data));
+    if (!message) return false;
+    if (message["type"] === "miko.response") {
+      const error = recordAt(message, "error"),
+        requestId = readString(message, "requestId");
+      if (error && this.denial) {
+        this.denial({
+          type: "rpc_error",
+          requestType:
+            requestId === "hub-e2e-unrelated-steer" ? "submit" : "daemon.get_status.request",
+          code: readString(error, "code") ?? "unknown",
+        });
         this.denial = undefined;
       }
+      const result = recordAt(message, "result");
+      if (result && Array.isArray(result["entries"]) && this.providerSnapshot) {
+        this.providerSnapshot(result);
+        this.providerSnapshot = undefined;
+      }
+      const executionId = requestId && this.creationExecutions.get(requestId),
+        agentId = result && readString(result, "id");
+      if (executionId && agentId && result) {
+        const ids = this.agentIdsByExecution.get(executionId) ?? new Set<string>();
+        ids.add(agentId);
+        this.agentIdsByExecution.set(executionId, ids);
+        this.createdAgentsByExecution.set(executionId, {
+          agentId,
+          hasCurrentState: true,
+          status: readString(result, "status") ?? null,
+        });
+        if (this.loseCreateResponse) {
+          this.loseCreateResponse = false;
+          this.createResponseDropped?.();
+          this.createResponseDropped = undefined;
+          return true;
+        }
+      }
     }
-  }
-
-  private observeCreateResponse(message: Record<string, unknown> | undefined): boolean {
-    if (message?.["type"] !== "status") return false;
-    const payload = recordAt(message, "payload");
-    if (payload?.["status"] !== "agent_created") return false;
-    const requestId = readString(payload, "requestId");
-    const executionId = requestId && this.creationExecutions.get(requestId);
-    const agentId = payload && readString(payload, "agentId");
-    if (executionId && agentId) {
-      const ids = this.agentIdsByExecution.get(executionId) ?? new Set<string>();
-      ids.add(agentId);
-      this.agentIdsByExecution.set(executionId, ids);
-      const agent = recordAt(payload, "agent");
-      const status = agent ? (readString(agent, "status") ?? null) : null;
-      this.createdAgentsByExecution.set(executionId, {
-        agentId,
-        hasCurrentState: agent !== undefined,
-        status,
-      });
-    }
-    if (!this.loseCreateResponse) return false;
-    this.loseCreateResponse = false;
-    this.createResponseDropped?.();
-    this.createResponseDropped = undefined;
-    return true;
+    this.events.push(
+      `daemon message ${String(message["type"])} request=${readString(message, "requestId") ?? ""}`,
+    );
+    return false;
   }
 }
 
@@ -386,11 +367,4 @@ function recordAt(
 
 function readString(value: Record<string, unknown>, key: string): string | undefined {
   return typeof value[key] === "string" ? value[key] : undefined;
-}
-
-function sessionMessage(
-  envelope: Record<string, unknown> | undefined,
-): Record<string, unknown> | undefined {
-  if (envelope?.["type"] !== "session") return envelope;
-  return recordAt(envelope, "message");
 }

@@ -1,53 +1,19 @@
 import { DaemonAgents } from "./agents/index.js";
-import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
-import { z } from "zod";
 import type { Logger } from "pino";
 import type { Database, DaemonRecord } from "../db/types.js";
 import { reportFailure, type FailureKind } from "../failures/index.js";
 import { logger as defaultLogger } from "../logger.js";
 import {
-  HubExecutionAgentValidateRequestSchema,
-  HubExecutionAgentValidateResponseSchema,
-  GetProvidersSnapshotRequestSchema,
-  GetProvidersSnapshotResponseSchema,
-  RefreshProvidersSnapshotRequestSchema,
-  RefreshProvidersSnapshotResponseSchema,
-  HubExecutionOutboundSchema,
-  HubDaemonHelloSchema,
-  HubDaemonServerInfoEnvelopeSchema,
-} from "../hub/protocol.js";
-import { type DaemonConnection } from "./protocol.js";
-import type { HubProviderSnapshot } from "../hub/protocol.js";
-
-interface PendingAgentValidationRequest {
-  kind: "agent-validation";
-  generation: number;
-  resolve(value: { valid: true } | { valid: false; issues: readonly AgentValidationIssue[] }): void;
-  reject(error: Error): void;
-}
-interface PendingProviderSnapshotRequest {
-  kind: "provider-snapshot";
-  generation: number;
-  resolve(value: HubProviderSnapshot): void;
-  reject(error: Error): void;
-}
-interface PendingProviderRefreshRequest {
-  kind: "provider-refresh";
-  generation: number;
-  resolve(): void;
-  reject(error: Error): void;
-}
-interface AgentValidationIssue {
-  path: readonly (string | number)[];
-  message: string;
-}
-type PendingRequest =
-  | PendingAgentValidationRequest
-  | PendingProviderSnapshotRequest
-  | PendingProviderRefreshRequest;
+  EXECUTION_PROTOCOL_HEADER,
+  EXECUTION_PROTOCOL_VERSION,
+  HelloSchema,
+  ReadySchema,
+} from "../miko/protocol.js";
+import type { DaemonConnection } from "./protocol.js";
 interface ActiveSocket {
   agents: DaemonAgents;
   generation: number;
@@ -55,20 +21,13 @@ interface ActiveSocket {
   daemon: DaemonRecord;
   ready: boolean;
   presenceReady: Promise<void>;
-  providerSnapshotSupported: boolean;
 }
-
-export type DaemonSessionProtocol = "legacy" | "session-v1";
-
-const DAEMON_SESSION_PROTOCOL_HEADER = "x-paseo-session-protocol";
-const DAEMON_SESSION_PROTOCOL_VERSION = "1";
 
 type DaemonConnectedHandler = (daemon: DaemonRecord) => void | Promise<void>;
 type DaemonRevokedHandler = (daemon: DaemonRecord) => void | Promise<void>;
 
 export class ActiveDaemonRegistry {
   private readonly active = new Map<string, ActiveSocket>();
-  private readonly pendingByDaemon = new Map<string, Map<string, PendingRequest>>();
   private readonly connectedHandlers = new Set<DaemonConnectedHandler>();
   private readonly revokedHandlers = new Set<DaemonRevokedHandler>();
   private readonly presenceWrites = new Set<Promise<void>>();
@@ -80,13 +39,8 @@ export class ActiveDaemonRegistry {
     private readonly failureLogger: Pick<Logger, "warn" | "error"> = defaultLogger,
   ) {}
 
-  accept(
-    daemon: DaemonRecord,
-    socket: WebSocket,
-    sessionProtocol: DaemonSessionProtocol = "session-v1",
-  ): void {
+  accept(daemon: DaemonRecord, socket: WebSocket): void {
     const previous = this.active.get(daemon.id);
-    if (previous) this.rejectGeneration(daemon.id, previous.generation);
     const active: ActiveSocket = {
       agents: new DaemonAgents(
         (frame) => socket.send(frame),
@@ -98,7 +52,6 @@ export class ActiveDaemonRegistry {
       daemon,
       ready: false,
       presenceReady: Promise.resolve(),
-      providerSnapshotSupported: false,
     };
     this.active.set(daemon.id, active);
     previous?.agents.close();
@@ -117,7 +70,6 @@ export class ActiveDaemonRegistry {
       active.agents.close();
       if (this.active.get(daemon.id)?.generation === active.generation) {
         this.active.delete(daemon.id);
-        this.rejectGeneration(daemon.id, active.generation);
         const write = active.presenceReady.then(() =>
           this.database.setDaemonPresence(daemon.id, "offline"),
         );
@@ -130,21 +82,11 @@ export class ActiveDaemonRegistry {
         );
       }
     });
-    if (sessionProtocol === "legacy") {
-      this.markReady(active);
-    } else {
-      socket.send(
-        JSON.stringify(
-          HubDaemonHelloSchema.parse({
-            type: "hello",
-            clientId: `hub:${daemon.id}`,
-            clientType: "hub",
-            capabilities: { all_providers: true, selective_agent_timeline: true },
-            protocolVersion: 1,
-          }),
-        ),
-      );
-    }
+    socket.send(
+      JSON.stringify(
+        HelloSchema.parse({ type: "miko.hello", version: EXECUTION_PROTOCOL_VERSION }),
+      ),
+    );
   }
 
   onConnected(handler: DaemonConnectedHandler): () => void {
@@ -162,8 +104,8 @@ export class ActiveDaemonRegistry {
     if (!active?.ready || !active.daemon.permissions.includes("hub.execute")) return undefined;
     return {
       agents: this.active.get(daemonId)!.agents,
-      getProviderSnapshot: (options) => this.getProviderSnapshot(daemonId, options),
-      refreshProviderSnapshot: (options) => this.refreshProviderSnapshot(daemonId, options),
+      getProviderSnapshot: (options) => active.agents.providers(options),
+      refreshProviderSnapshot: (options) => active.agents.refresh(options),
       validateAgentConfiguration: (agent) => this.validateAgentConfiguration(daemonId, agent),
     };
   }
@@ -171,31 +113,12 @@ export class ActiveDaemonRegistry {
   validateAgentConfiguration(
     daemonId: string,
     agent: import("../config/compiler.js").CompiledAgent,
-  ): Promise<{ valid: true } | { valid: false; issues: readonly AgentValidationIssue[] }> {
+  ) {
     const active = this.active.get(daemonId);
     if (!active?.ready) return Promise.reject(new Error("daemon_not_connected"));
-    if (!active.daemon.permissions.includes("hub.execute")) {
+    if (!active.daemon.permissions.includes("hub.execute"))
       return Promise.reject(new Error("daemon_execution_not_allowed"));
-    }
-    const requestId = randomUUID();
-    const request = HubExecutionAgentValidateRequestSchema.parse({
-      type: "hub.execution.agent.validate.request",
-      requestId,
-      provider: agent.provider,
-      model: agent.model,
-      modeId: agent.mode,
-      thinkingOptionId: agent.thinkingOptionId,
-      providerOptions: agent.options,
-    });
-    return new Promise((resolve, reject) => {
-      this.pendingFor(daemonId).set(requestId, {
-        kind: "agent-validation",
-        generation: active.generation,
-        resolve,
-        reject,
-      });
-      active.socket.send(JSON.stringify({ type: "session", message: request }));
-    });
+    return active.agents.validate(agent);
   }
 
   updatePermissions(daemon: DaemonRecord): void {
@@ -223,62 +146,6 @@ export class ActiveDaemonRegistry {
     );
     await Promise.all(sockets);
     await Promise.all(this.presenceWrites);
-    for (const [daemonId, pending] of this.pendingByDaemon) {
-      for (const request of pending.values()) request.reject(new Error("daemon disconnected"));
-      this.pendingByDaemon.delete(daemonId);
-    }
-  }
-
-  private getProviderSnapshot(
-    daemonId: string,
-    options: { cwd?: string },
-  ): Promise<HubProviderSnapshot> {
-    const active = this.requireProviderSnapshotConnection(daemonId);
-    const requestId = randomUUID();
-    const request = GetProvidersSnapshotRequestSchema.parse({
-      type: "get_providers_snapshot_request",
-      requestId,
-      cwd: options.cwd,
-    });
-    return new Promise((resolve, reject) => {
-      this.pendingFor(daemonId).set(requestId, {
-        kind: "provider-snapshot",
-        generation: active.generation,
-        resolve,
-        reject,
-      });
-      active.socket.send(JSON.stringify({ type: "session", message: request }));
-    });
-  }
-
-  private refreshProviderSnapshot(
-    daemonId: string,
-    options: { cwd?: string; providers?: string[] },
-  ): Promise<void> {
-    const active = this.requireProviderSnapshotConnection(daemonId);
-    const requestId = randomUUID();
-    const request = RefreshProvidersSnapshotRequestSchema.parse({
-      type: "refresh_providers_snapshot_request",
-      requestId,
-      cwd: options.cwd,
-      providers: options.providers,
-    });
-    return new Promise((resolve, reject) => {
-      this.pendingFor(daemonId).set(requestId, {
-        kind: "provider-refresh",
-        generation: active.generation,
-        resolve,
-        reject,
-      });
-      active.socket.send(JSON.stringify({ type: "session", message: request }));
-    });
-  }
-
-  private requireProviderSnapshotConnection(daemonId: string): ActiveSocket {
-    const active = this.active.get(daemonId);
-    if (!active?.ready) throw new Error("daemon_not_connected");
-    if (!active.providerSnapshotSupported) throw new Error("daemon_provider_snapshot_unsupported");
-    return active;
   }
 
   private receive(active: ActiveSocket, raw: string): void {
@@ -292,38 +159,15 @@ export class ActiveDaemonRegistry {
       return;
     }
     if (active.agents.receive(value)) return;
-    const serverInfo = HubDaemonServerInfoEnvelopeSchema.safeParse(value);
-    if (serverInfo.success) {
-      this.acceptServerInfo(
-        active,
-        serverInfo.data.message.payload.permissions,
-        serverInfo.data.message.payload.features?.providersSnapshot === true,
-      );
+    const ready = ReadySchema.safeParse(value);
+    if (!ready.success) {
+      active.socket.close(4400, "invalid Miko execution protocol");
       return;
     }
-    const envelope = HubExecutionOutboundSchema.safeParse(value);
-    if (!envelope.success) return;
-    const message = envelope.data.message;
-    if (message.type === "rpc_error") return this.receiveRpcError(active, message.payload);
-    const validated = HubExecutionAgentValidateResponseSchema.safeParse(message);
-    if (validated.success) return this.receiveAgentValidation(active, validated.data);
-    const providerSnapshot = GetProvidersSnapshotResponseSchema.safeParse(message);
-    if (providerSnapshot.success)
-      return this.receiveProviderSnapshot(active, providerSnapshot.data);
-    const providerRefresh = RefreshProvidersSnapshotResponseSchema.safeParse(message);
-    if (providerRefresh.success) return this.receiveProviderRefresh(active, providerRefresh.data);
-  }
-
-  private acceptServerInfo(
-    active: ActiveSocket,
-    permissions: readonly string[],
-    providerSnapshotSupported = false,
-  ): void {
-    if (!samePermissions(permissions, active.daemon.permissions)) {
+    if (!samePermissions(ready.data.permissions, active.daemon.permissions)) {
       active.socket.close(4403, "daemon session permissions do not match enrollment");
       return;
     }
-    active.providerSnapshotSupported = providerSnapshotSupported;
     this.markReady(active);
   }
 
@@ -382,95 +226,6 @@ export class ActiveDaemonRegistry {
       { logger: this.failureLogger, ...(kind === undefined ? {} : { kind }) },
     );
   }
-
-  private receiveAgentValidation(
-    active: ActiveSocket,
-    response: z.infer<typeof HubExecutionAgentValidateResponseSchema>,
-  ): void {
-    const requests = this.pendingFor(active.daemon.id);
-    const pending = requests.get(response.payload.requestId);
-    if (
-      !pending ||
-      pending.kind !== "agent-validation" ||
-      pending.generation !== active.generation
-    ) {
-      return;
-    }
-    requests.delete(response.payload.requestId);
-    if (response.payload.error !== null) {
-      pending.reject(new Error(response.payload.error));
-      return;
-    }
-    pending.resolve(
-      response.payload.valid ? { valid: true } : { valid: false, issues: response.payload.issues },
-    );
-  }
-
-  private receiveProviderSnapshot(
-    active: ActiveSocket,
-    response: z.infer<typeof GetProvidersSnapshotResponseSchema>,
-  ): void {
-    const requests = this.pendingFor(active.daemon.id);
-    const pending = requests.get(response.payload.requestId);
-    if (
-      !pending ||
-      pending.kind !== "provider-snapshot" ||
-      pending.generation !== active.generation
-    ) {
-      return;
-    }
-    requests.delete(response.payload.requestId);
-    pending.resolve(response.payload);
-  }
-
-  private receiveProviderRefresh(
-    active: ActiveSocket,
-    response: z.infer<typeof RefreshProvidersSnapshotResponseSchema>,
-  ): void {
-    const requests = this.pendingFor(active.daemon.id);
-    const pending = requests.get(response.payload.requestId);
-    if (
-      !pending ||
-      pending.kind !== "provider-refresh" ||
-      pending.generation !== active.generation
-    ) {
-      return;
-    }
-    requests.delete(response.payload.requestId);
-    if (!response.payload.acknowledged) {
-      pending.reject(new Error("daemon provider refresh was not acknowledged"));
-      return;
-    }
-    pending.resolve();
-  }
-
-  private receiveRpcError(
-    active: ActiveSocket,
-    payload: { requestId: string; error: string },
-  ): void {
-    const requests = this.pendingFor(active.daemon.id);
-    const pending = requests.get(payload.requestId);
-    if (pending?.generation !== active.generation) return;
-    requests.delete(payload.requestId);
-    pending.reject(new Error(payload.error));
-  }
-
-  private pendingFor(daemonId: string): Map<string, PendingRequest> {
-    const existing = this.pendingByDaemon.get(daemonId);
-    if (existing) return existing;
-    const pending = new Map<string, PendingRequest>();
-    this.pendingByDaemon.set(daemonId, pending);
-    return pending;
-  }
-
-  private rejectGeneration(daemonId: string, generation: number): void {
-    const pending = this.pendingFor(daemonId);
-    for (const [requestId, request] of pending) {
-      if (request.generation !== generation) continue;
-      pending.delete(requestId);
-      request.reject(new Error("daemon disconnected"));
-    }
-  }
 }
 
 function samePermissions(actual: readonly string[], expected: readonly string[]): boolean {
@@ -485,8 +240,8 @@ export function createDaemonUpgradeHandler(
 ) {
   const server = new WebSocketServer({ noServer: true });
   server.on("headers", (headers, request) => {
-    if (request.headers[DAEMON_SESSION_PROTOCOL_HEADER] === DAEMON_SESSION_PROTOCOL_VERSION) {
-      headers.push(`${DAEMON_SESSION_PROTOCOL_HEADER}: ${DAEMON_SESSION_PROTOCOL_VERSION}`);
+    if (request.headers[EXECUTION_PROTOCOL_HEADER] === EXECUTION_PROTOCOL_VERSION) {
+      headers.push(`${EXECUTION_PROTOCOL_HEADER}: ${EXECUTION_PROTOCOL_VERSION}`);
     }
   });
   return async function upgrade(
@@ -509,13 +264,9 @@ export function createDaemonUpgradeHandler(
       !matchesVerifier(credential, daemon.credentialVerifier)
     )
       return rejectUpgrade(socket, 403);
-    const sessionProtocol =
-      request.headers[DAEMON_SESSION_PROTOCOL_HEADER] === DAEMON_SESSION_PROTOCOL_VERSION
-        ? "session-v1"
-        : "legacy";
-    server.handleUpgrade(request, socket, head, (webSocket) =>
-      registry.accept(daemon, webSocket, sessionProtocol),
-    );
+    if (request.headers[EXECUTION_PROTOCOL_HEADER] !== EXECUTION_PROTOCOL_VERSION)
+      return rejectUpgrade(socket, 403);
+    server.handleUpgrade(request, socket, head, (webSocket) => registry.accept(daemon, webSocket));
   };
 }
 

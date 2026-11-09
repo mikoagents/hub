@@ -31,7 +31,7 @@ function listing(daemons: readonly BrowserDaemon[]): BrowserDaemonList {
   return { daemons: [...daemons], canManage: true };
 }
 
-function markup(link: DaemonLink, command = "paseo hub login http://localhost:4173"): string {
+function markup(link: DaemonLink, command = "miko hub login http://localhost:4173"): string {
   return renderToStaticMarkup(
     <ThemeProvider>
       <DaemonHandoffView link={link} command={command} onRetry={NOOP} onContinue={NOOP} />
@@ -43,20 +43,20 @@ describe("the daemon login command", () => {
   it("names the address the operator is looking at, exactly", () => {
     assert.equal(
       daemonLoginCommand("http://localhost:4173"),
-      "paseo hub login http://localhost:4173",
+      "miko hub login http://localhost:4173",
     );
     assert.equal(
       daemonLoginCommand("https://hub.internal.example:8443"),
-      "paseo hub login https://hub.internal.example:8443",
+      "miko hub login https://hub.internal.example:8443",
     );
   });
 
   it("omits the argument only on the Hub the CLI already defaults to", () => {
-    assert.equal(daemonLoginCommand("https://hub.paseo.sh"), "paseo hub login");
+    assert.equal(daemonLoginCommand("https://hub.paseo.sh"), "miko hub login");
     // A look-alike is still somebody else's Hub and has to be named.
     assert.equal(
       daemonLoginCommand("https://hub.paseo.sh.example.com"),
-      "paseo hub login https://hub.paseo.sh.example.com",
+      "miko hub login https://hub.paseo.sh.example.com",
     );
   });
 });
@@ -120,7 +120,7 @@ describe("the daemon handoff screen", () => {
     const screen = markup({ state: "waiting" });
 
     assert.match(screen, /Connect a daemon/u);
-    assert.ok(screen.includes("paseo hub login http://localhost:4173"));
+    assert.ok(screen.includes("miko hub login http://localhost:4173"));
     assert.match(screen, /Waiting for a daemon to connect/u);
     assert.match(screen, /Do this later/u);
     assert.match(screen, /starter workflow/u);
@@ -139,7 +139,7 @@ describe("the daemon handoff screen", () => {
     assert.match(screen, /Hub couldn&#x27;t check for daemons/u);
     assert.match(screen, /Hub did not answer\./u);
     assert.match(screen, /Try again/u);
-    assert.ok(screen.includes("paseo hub login http://localhost:4173"));
+    assert.ok(screen.includes("miko hub login http://localhost:4173"));
     // A failed check is not a reason to strand the operator here.
     assert.match(screen, /Do this later/u);
   });
@@ -151,6 +151,6 @@ describe("the daemon handoff screen", () => {
     assert.match(screen, /workshop is connected to this Hub/u);
     assert.match(screen, /Continue/u);
     // Nothing left to run: the command would only invite a second login.
-    assert.ok(!screen.includes("paseo hub login"));
+    assert.ok(!screen.includes("miko hub login"));
   });
 });

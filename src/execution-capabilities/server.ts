@@ -60,22 +60,29 @@ export function createExecutionCapabilityServer(
         { name: "paseo-hub-session", version: "1.0.0" },
         { capabilities: { tools: {} } },
       );
-      server.setRequestHandler(ListToolsRequestSchema, () => ({
-        tools: session.tools.map((tool) => ({
-          ...tool,
-          inputSchema: {
-            ...tool.inputSchema,
-            properties: {
-              ...tool.inputSchema.properties,
-              executionId: {
-                type: "string",
-                description: "Execution ID supplied with the request prompt.",
+      server.setRequestHandler(ListToolsRequestSchema, async () => {
+        const executionIds = (await options.database.listAgentSessionExecutions(session.id))
+          .filter((execution) => execution.status === "spawning" || execution.status === "running")
+          .map((execution) => execution.id);
+        return {
+          tools: session.tools.map((tool) => ({
+            ...tool,
+            inputSchema: {
+              ...tool.inputSchema,
+              properties: {
+                ...tool.inputSchema.properties,
+                executionId: {
+                  type: "string",
+                  description:
+                    "Select the active execution this tool call completes or writes output for.",
+                  enum: executionIds,
+                },
               },
+              required: [...(tool.inputSchema.required ?? []), "executionId"],
             },
-            required: [...(tool.inputSchema.required ?? []), "executionId"],
-          },
-        })),
-      }));
+          })),
+        };
+      });
       server.setRequestHandler(CallToolRequestSchema, async (call) => {
         const { executionId, ...args } = call.params.arguments ?? {};
         if (typeof executionId !== "string" || !z.uuid().safeParse(executionId).success)

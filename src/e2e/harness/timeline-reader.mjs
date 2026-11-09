@@ -12,7 +12,7 @@ const requireFromPaseo = createRequire(join(packagesRoot, "package.json"));
 const { WebSocket } = requireFromPaseo("ws");
 const { DaemonClient } = await import(
   pathToFileURL(
-    join(packagesRoot, "node_modules/@getpaseo/client/dist/daemon-client.js"),
+    join(packagesRoot, "node_modules/@mikoagents/client/dist/daemon-client.js"),
   ).toString()
 );
 const client = new DaemonClient({

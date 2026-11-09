@@ -27,6 +27,10 @@ const scopedRenameSchema = organizationScopeSchema.extend(renameSchema.shape);
 const scopedDaemonIdSchema = organizationScopeSchema.extend(daemonIdSchema.shape);
 const providerSnapshotSchema = scopedDaemonIdSchema.extend({
   cwd: z.string().trim().min(1).optional(),
+  backend: z
+    .string()
+    .regex(/^[a-z][a-z0-9_-]*$/)
+    .optional(),
   refresh: z.boolean().optional(),
 });
 
@@ -46,6 +50,7 @@ export const daemonProviderSnapshot = createServerFn({ method: "GET" })
         await catalog.read(getRequest(), {
           organizationSlug: data.organizationSlug,
           daemonId: data.daemonId,
+          ...(data.backend === undefined ? {} : { backend: data.backend }),
           ...(data.cwd === undefined ? {} : { cwd: data.cwd }),
           ...(data.refresh === undefined ? {} : { refresh: data.refresh }),
         }),
@@ -57,7 +62,7 @@ export const daemonProviderSnapshot = createServerFn({ method: "GET" })
         {
           fallback:
             error instanceof Error && error.message === "daemon_provider_snapshot_unsupported"
-              ? "Update Paseo on this daemon to browse its providers."
+              ? "Update Miko on this daemon to browse its providers."
               : "Hub couldn't load this daemon's providers. Check the daemon connection and retry.",
         },
       );

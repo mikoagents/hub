@@ -29,7 +29,7 @@ test("walks a hosted organization from sign-in to its first run", async ({ hub, 
     await home.expectStep("Connect an app", "To do");
     await home.expectStep("Connect a daemon", "To do");
     await expect(home.command("Connect a daemon")).toHaveText(
-      `paseo hub login ${hub.primaryApplication().origin}`,
+      `miko hub login ${hub.primaryApplication().origin}`,
     );
     await home.expectStep("Create a trigger", "To do");
     await home.expectStep("Run it", "To do");
@@ -51,7 +51,7 @@ test("walks a hosted organization from sign-in to its first run", async ({ hub, 
     await home.reload();
     await home.expectStep("Connect a daemon", "Cannot run agents");
     await expect(home.command("Connect a daemon")).toHaveText(
-      "paseo hub permissions grant hub.execute",
+      "miko hub permissions grant hub.execute",
     );
     await home.capture(`${SHOTS}/02-cannot-run.png`);
   });

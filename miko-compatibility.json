@@ -1,0 +1,8 @@
+{
+  "daemonRepository": "https://github.com/mikoagents/miko-daemon.git",
+  "daemonCommit": "1b340acb2cfe179444c77936d90238100dcfcfe4",
+  "protocolPackage": "@mikoagents/execution-protocol",
+  "protocolVersion": "1.0.0",
+  "protocolPath": "packages/execution-protocol/src/index.ts",
+  "protocolSha256": "b700c0f020c298ed656817db39807df43083e794ee1035a724b2d48c8dae4f48"
+}

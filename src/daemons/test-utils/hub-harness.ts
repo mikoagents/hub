@@ -1,3 +1,4 @@
+import { fixtureRequest, fixtureResponse, handleFixtureReceipt } from "./execution-fixture.js";
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import type { IncomingMessage } from "node:http";
@@ -14,7 +15,6 @@ import { createHubApplication, type HubRuntime } from "../../app.js";
 import { createFetchServer } from "../../http/node-server.js";
 import { startApplication, stopApplication } from "../../server/runtime.js";
 import {
-  HubExecutionAgentValidateRequestSchema,
   type HubExecutionControlAction,
   type HubExecutionAgentSnapshot,
 } from "../../hub/protocol.js";
@@ -107,7 +107,13 @@ const LegacyEnrollmentSchema = z.object({
 const ExecutionSessionRequestSchema = z.object({
   type: z.literal("session"),
   message: z.discriminatedUnion("type", [
-    HubExecutionAgentValidateRequestSchema,
+    z
+      .object({
+        type: z.literal("hub.execution.agent.validate.request"),
+        requestId: z.string(),
+        provider: z.string(),
+      })
+      .passthrough(),
     z.object({
       type: z.literal("create_agent_request"),
       requestId: z.string(),
@@ -2294,7 +2300,7 @@ class TestDaemon {
       headers: {
         authorization: `Bearer ${this.credential}`,
         "x-paseo-daemon-id": this.daemonId,
-        "x-paseo-session-protocol": "1",
+        "x-miko-execution-protocol": "1.0.0",
       },
     });
     socket.on("message", (data) => this.receive(data));
@@ -2312,6 +2318,7 @@ class TestDaemon {
         headers: {
           authorization: `Bearer ${secret}`,
           "x-paseo-daemon-id": this.daemonId,
+          "x-miko-execution-protocol": "1.0.0",
         },
       });
       socket.once("unexpected-response", (_request, response) => {
@@ -2601,6 +2608,7 @@ class TestDaemon {
   }
   private receive(data: RawData): void {
     const value = JSON.parse(readText(data)) as unknown;
+    if (handleFixtureReceipt(value, (frame) => this.socket?.send(frame))) return;
     if (isHubHello(value)) {
       this.send({
         type: "status",
@@ -2613,7 +2621,7 @@ class TestDaemon {
       });
       return;
     }
-    const envelope = ExecutionSessionRequestSchema.safeParse(value);
+    const envelope = ExecutionSessionRequestSchema.safeParse(fixtureRequest(value));
     if (!envelope.success) return;
     const request = envelope.data.message;
     if (request.type === "hub.execution.agent.validate.request") {
@@ -2636,6 +2644,7 @@ class TestDaemon {
       request.type === "agent.timeline.set_subscription.request"
     ) {
       this.subscribe(request);
+      this.sendWatchedSnapshot(value, request.type);
       return;
     }
     if (request.type === "send_agent_message_request") {
@@ -2672,6 +2681,7 @@ class TestDaemon {
     if (this.materializeSpawn && !this.agents.has(agentId)) {
       this.agents.set(agentId, {
         ...request.config,
+        workspaceTitle: request.config["workspaceTitle"],
         modeId: request.config["modeId"],
         env: request.env,
         worktree: request.worktree,
@@ -2685,6 +2695,23 @@ class TestDaemon {
     else this.acknowledge(pending);
   }
 
+  private sendWatchedSnapshot(value: unknown, type: string): void {
+    if (type === "fetch_agents_request") {
+      const raw = z.object({ input: z.object({ agentId: z.string() }) }).parse(value);
+      const agent = this.agents.get(raw.input.agentId);
+      if (agent && !this.omitSnapshotOnReconnect)
+        this.send({
+          type: "agent_update",
+          payload: {
+            kind: "upsert",
+            agent: {
+              ...agentSnapshot(raw.input.agentId, readAgentStatus(agent["status"])),
+              workspaceId: `workspace-${raw.input.agentId}`,
+            },
+          },
+        });
+    }
+  }
   private subscribe(request: {
     type: "fetch_agents_request" | "agent.timeline.set_subscription.request";
     requestId: string;
@@ -2780,12 +2807,14 @@ class TestDaemon {
     return value;
   }
   private send(value: unknown): void {
-    this.socket?.send(JSON.stringify({ type: "session", message: value }));
+    this.socket?.send(JSON.stringify(fixtureResponse(value)));
   }
 }
 
 function isHubHello(value: unknown): boolean {
-  return typeof value === "object" && value !== null && "type" in value && value.type === "hello";
+  return (
+    typeof value === "object" && value !== null && "type" in value && value.type === "miko.hello"
+  );
 }
 
 function agentSnapshot(

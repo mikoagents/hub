@@ -49,7 +49,14 @@ class PhaseFiveAgent {
       .join("\n");
     const service = /Deploy ([^ ]+) for/u.exec(prompt)?.[1] ?? "unknown";
     const output = `phase-five:${service}`;
-    const sessionExecutionId = /Hub execution: ([a-f0-9-]+)/u.exec(prompt)?.[1];
+    let sessionExecutionId;
+    if (this.hubMcp && new URL(this.hubMcp.url).pathname.startsWith("/agent-sessions/")) {
+      await initializeMcp(this.hubMcp);
+      const listing = await callMcp(this.hubMcp, 2, "tools/list", {});
+      sessionExecutionId =
+        listing.result?.tools?.[0]?.inputSchema?.properties?.executionId?.enum?.[0];
+      if (!sessionExecutionId) throw new Error("Session has no authorized execution IDs");
+    }
     const executionId =
       sessionExecutionId ?? (this.hubMcp ? executionIdFromMcp(this.hubMcp) : null);
     const executionArgs = sessionExecutionId ? { executionId: sessionExecutionId } : {};

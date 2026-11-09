@@ -112,7 +112,7 @@ export class SourcePaseo {
 
   async runFrom(args: string[], cwd: string): Promise<Record<string, unknown>> {
     const result = await runCommand(
-      join(this.paths.packagesRoot, "node_modules/.bin/paseo"),
+      join(this.paths.packagesRoot, "node_modules/.bin/miko"),
       args,
       cwd,
       sourceEnvironment(this.paths.paseoHome),
@@ -120,7 +120,31 @@ export class SourcePaseo {
     return parseCliResult(result.stdout);
   }
 
+  private async bindings() {
+    const root = join(this.paths.paseoHome, "miko");
+    const bindings: Array<{ id: string; nativeAgentId: string }> = [];
+    for (const daemon of await readdir(root))
+      for (const file of await readdir(join(root, daemon, "sessions"))) {
+        bindings.push(
+          z
+            .object({ id: z.string(), nativeAgentId: z.string() })
+            .parse(JSON.parse(await readFile(join(root, daemon, "sessions", file), "utf8"))),
+        );
+      }
+    return bindings;
+  }
+  async nativeAgentId(id: string): Promise<string> {
+    const binding = (await this.bindings()).find((value) => value.id === id);
+    if (!binding) throw new Error("Source agent has no Miko runtime binding");
+    return binding.nativeAgentId;
+  }
+  async executionReference(nativeAgentId: string): Promise<string> {
+    const binding = (await this.bindings()).find((value) => value.nativeAgentId === nativeAgentId);
+    if (!binding) throw new Error("Native agent has no Miko execution reference");
+    return binding.id;
+  }
   async canonicalAgentTimeline(agentId: string): Promise<unknown[]> {
+    agentId = await this.nativeAgentId(agentId);
     const result = await runCommand(
       process.execPath,
       [TIMELINE_READER, this.paths.packagesRoot, this.paths.daemonHost, agentId],
@@ -132,6 +156,7 @@ export class SourcePaseo {
   }
 
   async agentProvider(agentId: string): Promise<string> {
+    agentId = await this.nativeAgentId(agentId);
     const result = await this.run([
       "agent",
       "inspect",
@@ -248,7 +273,7 @@ export class SourcePaseo {
       [
         join(
           this.paths.packagesRoot,
-          "node_modules/@getpaseo/server/dist/scripts/supervisor-entrypoint.js",
+          "node_modules/@mikoagents/server/dist/scripts/supervisor-entrypoint.js",
         ),
       ],
       {
@@ -283,9 +308,9 @@ export class SourcePaseo {
 }
 
 export function resolvePaseoWorktree(): string {
-  const configured = process.env["PASEO_E2E_WORKTREE"];
+  const configured = process.env["MIKO_E2E_WORKTREE"];
   if (!configured) {
-    throw new Error("PASEO_E2E_WORKTREE must name the exact source checkout under test");
+    throw new Error("MIKO_E2E_WORKTREE must name the exact source checkout under test");
   }
   return resolve(configured);
 }
@@ -309,7 +334,7 @@ const packagedArtifacts = new Map<string, Promise<string>>();
  * the build inside the test's own timeout. `globalSetup` builds ahead of the workers and passes
  * the path down through here.
  */
-const PREBUILT = "PASEO_E2E_PACKAGES";
+const PREBUILT = "MIKO_E2E_PACKAGES";
 
 export function packagePaseoArtifacts(paseoRoot: string): Promise<string> {
   const prebuilt = process.env[PREBUILT];
@@ -330,19 +355,18 @@ export async function prebuildPaseoArtifacts(paseoRoot: string): Promise<string>
 }
 
 async function buildPaseoArtifacts(paseoRoot: string): Promise<string> {
+  await runCommand(
+    process.execPath,
+    [resolve("scripts/check-miko-protocol.mjs"), paseoRoot],
+    process.cwd(),
+    {},
+  );
   const root = await mkdtemp(join(tmpdir(), "paseo-packaged-"));
   removeWhenTheProcessExits(root);
   const packages = join(root, "paseo-packages");
   const tarballs = join(root, "paseo-tarballs");
   await Promise.all([mkdir(packages), mkdir(tarballs)]);
-  for (const workspace of ["protocol", "relay", "highlight", "plugin", "client", "server", "cli"]) {
-    await runCommand(
-      "npm",
-      ["pack", "--ignore-scripts", "--pack-destination", tarballs],
-      join(paseoRoot, "packages", workspace),
-      {},
-    );
-  }
+  await runCommand(process.execPath, ["scripts/pack-miko.mjs", tarballs], paseoRoot, {});
   await writeFile(
     join(packages, "package.json"),
     JSON.stringify({ private: true, type: "module" }),
@@ -366,6 +390,7 @@ export function sourceEnvironment(paseoHome: string): NodeJS.ProcessEnv {
     ...process.env,
     PASEO_AGENT_ID: undefined,
     PASEO_WORKSPACE_ID: undefined,
+    MIKO_HOME: paseoHome,
     PASEO_HOME: paseoHome,
     PASEO_NODE_INSPECT: "0",
     PASEO_PAIRING_QR: "0",

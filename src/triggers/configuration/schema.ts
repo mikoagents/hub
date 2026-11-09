@@ -66,6 +66,10 @@ export const TriggerEventSchema = z
 
 export const TriggerAgentSchema = z
   .object({
+    backend: z
+      .string()
+      .regex(/^[a-z][a-z0-9_-]*$/)
+      .optional(),
     provider: z.string().min(1),
     model: z.string().min(1).optional(),
     mode: z.string().min(1).optional(),

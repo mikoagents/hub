@@ -8,6 +8,9 @@ export class ScheduleTestDaemon implements DaemonConnection {
   private readonly agent: AgentSnapshot = {
     id: "schedule-agent",
     workspaceId: "schedule-workspace",
+    backend: "local",
+    provider: "codex",
+    nativeAgentId: "native-agent",
     status: "running",
   };
   readonly agents: AgentConnection = {

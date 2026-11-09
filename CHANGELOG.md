@@ -4,6 +4,8 @@
 
 ### Added
 
+- Miko daemon execution backends with explicit native session bindings, durable request recovery and backend-aware provider configuration.
+
 - Status filters on the Triggers table, with the selected status remembered for each organization.
 - Light and dark appearance options, with a saved browser preference and automatic system theme support.
 - Opt-in GitHub PR readiness and `provider_state` deduplication combine review and CI notifications before starting an agent, skipping pending, clean and obsolete work without model tokens.
@@ -14,6 +16,8 @@
 - `github.pull_request_ready_for_review` triggers a workflow when a draft pull request is marked ready for review, without running on creation or later pushes. GitHub pull request deliveries expose the draft status and head SHA in the agent context for revision checks.
 
 ### Changed
+
+- Hub now requires the versioned Miko execution protocol. Upgrade after draining active work; old daemon registrations and continuation keys are retired by the cutover migration.
 
 - Unhandled provider event receipts expire automatically after seven days on every instance. Receipts routed to a trigger or still referenced by a run or attachment remain available.
 

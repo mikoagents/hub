@@ -331,9 +331,23 @@ async function runTwoStepWorkflow<
     agents: {
       create: async (key) => {
         if (options.outcome === "prelaunch_failure") throw new Error("daemon rejected agent");
-        return { id: key, workspaceId: "workspace", status: "idle" };
+        return {
+          id: key,
+          workspaceId: "workspace",
+          backend: "local",
+          provider: "codex",
+          nativeAgentId: "native-agent",
+          status: "idle",
+        };
       },
-      get: async (id) => ({ id, workspaceId: "workspace", status: "idle" }),
+      get: async (id) => ({
+        id,
+        workspaceId: "workspace",
+        backend: "local",
+        provider: "codex",
+        nativeAgentId: "native-agent",
+        status: "idle",
+      }),
       send: async () => {},
       control: async () => {},
       restore: async () => false,

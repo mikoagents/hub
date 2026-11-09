@@ -14,7 +14,11 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 docker build --tag "$image" .
-docker network create "$network" >/dev/null
+if [ -n "${DOCKER_SMOKE_SUBNET:-}" ]; then
+  docker network create --subnet "$DOCKER_SMOKE_SUBNET" "$network" >/dev/null
+else
+  docker network create "$network" >/dev/null
+fi
 docker run --detach --rm --name "$database" --network "$network" \
   --env POSTGRES_PASSWORD=postgres \
   --env POSTGRES_DB=paseo_hub \

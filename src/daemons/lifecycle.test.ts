@@ -9,6 +9,7 @@ import {
   createDaemonDispatchLifecycle,
   DaemonDispatchFailure,
   executionWorkspaceTitle,
+  MAX_EXECUTION_TITLE_CHARS,
   type DaemonDispatchLifecycle,
 } from "./lifecycle.js";
 import { createDurableWorkflowHandler } from "../workflows/engine.js";
@@ -16,7 +17,6 @@ import type { TriggerProvider } from "../triggers/index.js";
 import { createUnlimitedEntitlementsService } from "../entitlements/test-utils.js";
 import type { DaemonRecord } from "../db/types.js";
 import { createLogger, serializeError } from "../logger.js";
-import { MAX_EXPLICIT_AGENT_TITLE_CHARS } from "@getpaseo/protocol/agent-title-limits";
 import { assertOneFailure, FailureLogStream } from "../test-utils/failure-logs.js";
 
 const DAEMON_ID = "daemon-ack-test";
@@ -44,10 +44,10 @@ describe("execution workspace title", () => {
     );
     assert.equal(
       executionWorkspaceTitle(
-        { triggerName: "intake", title: `${"x".repeat(MAX_EXPLICIT_AGENT_TITLE_CHARS)} tail` },
+        { triggerName: "intake", title: `${"x".repeat(MAX_EXECUTION_TITLE_CHARS)} tail` },
         executionId,
       ),
-      "x".repeat(MAX_EXPLICIT_AGENT_TITLE_CHARS),
+      "x".repeat(MAX_EXECUTION_TITLE_CHARS),
     );
     assert.equal(
       executionWorkspaceTitle({ triggerName: "intake", title: "   " }, executionId),
@@ -125,7 +125,14 @@ describe("durable Hub action acknowledgement state", () => {
       let creates = 0;
       let currentSends = 0;
       let subscriptions = 0;
-      const agent = { id: AGENT_ID, workspaceId: "workspace-reconnect", status: "idle" as const };
+      const agent = {
+        id: AGENT_ID,
+        workspaceId: "workspace-reconnect",
+        backend: "local",
+        provider: "codex",
+        nativeAgentId: "native-agent",
+        status: "idle" as const,
+      };
       const agents: AgentConnection = {
         create: async () => {
           creates++;
@@ -414,6 +421,7 @@ async function acknowledgementFixture() {
     daemonId: DAEMON_ID,
     agentId: AGENT_ID,
     workspaceId: "workspace",
+    runtimeBinding: { backend: "local", provider: "codex", nativeAgentId: "native-agent" },
     compatibility: "test",
     capabilityTokenHash: "test",
     tools: [],
@@ -473,7 +481,14 @@ class AcknowledgementConnection implements DaemonConnection {
         else
           listener({
             type: "agent_update",
-            agent: { id: event.agentId, workspaceId: "workspace", status: event.agent.status },
+            agent: {
+              id: event.agentId,
+              workspaceId: "workspace",
+              backend: "local",
+              provider: "codex",
+              nativeAgentId: "native-agent",
+              status: event.agent.status,
+            },
             timestamp: event.timestamp,
           });
       }),

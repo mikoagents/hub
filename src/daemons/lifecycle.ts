@@ -26,7 +26,6 @@ import {
   type LaunchMachineIntent,
 } from "../dispatcher/launch-machine-intent.js";
 import { logger as defaultLogger } from "../logger.js";
-import { MAX_EXPLICIT_AGENT_TITLE_CHARS } from "@getpaseo/protocol/agent-title-limits";
 import { reportFailure } from "../failures/index.js";
 import { iterationFailure } from "../workflows/iterations.js";
 import type { TriggerProvider } from "../triggers/index.js";
@@ -1960,6 +1959,7 @@ async function buildCreateAgentOptions(
   materializedEnv: Readonly<Record<string, string>>,
 ): Promise<DaemonCreateAgentOptions> {
   return {
+    ...(intent.agent.backend === undefined ? {} : { backend: intent.agent.backend }),
     provider: intent.agent.provider,
     background: intent.background,
     title: EXECUTION_AGENT_TITLE,
@@ -1998,6 +1998,7 @@ async function buildCreateAgentOptions(
  * runs of one trigger apart. A continuation session keeps the titles from the execution that
  * created it. The daemon rejects titles over its limit, so clamp instead of failing.
  */
+export const MAX_EXECUTION_TITLE_CHARS = 200;
 export const EXECUTION_AGENT_TITLE = "Hub agent";
 
 export function executionWorkspaceTitle(
@@ -2007,7 +2008,7 @@ export function executionWorkspaceTitle(
   const authored = intent.title?.trim() ?? "";
   const title =
     authored.length > 0 ? authored : `Hub · ${intent.triggerName} · ${executionId.slice(0, 8)}`;
-  return title.slice(0, MAX_EXPLICIT_AGENT_TITLE_CHARS).trim();
+  return title.slice(0, MAX_EXECUTION_TITLE_CHARS).trim();
 }
 
 function buildAgentEnv(

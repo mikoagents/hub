@@ -1,7 +1,7 @@
 # Workflow step authority
 
 Workflow authority is authored on an individual step. It is not a trigger option,
-agent option, sandbox setting, or Paseo daemon feature.
+agent option, sandbox setting, or daemon feature.
 
 ## Generic connection values
 

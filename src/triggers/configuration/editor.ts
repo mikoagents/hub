@@ -27,6 +27,7 @@ export interface TriggerFormValue {
   recurrence?: Recurrence;
   daemon: string;
   cwd: string;
+  backend?: string;
   agent: string;
   mode: string;
   thinkingOptionId: string;
@@ -89,6 +90,7 @@ function toFormValue(
     cwd: trigger.run.target.cwd,
     agent: joinAgentId(agent.provider, agent.model),
     mode: agent.mode ?? "",
+    ...(agent.backend === undefined ? {} : { backend: agent.backend }),
     thinkingOptionId: agent.thinkingOptionId ?? "",
     providerOptions: agent.options === undefined ? "" : JSON.stringify(agent.options, null, 2),
     continuationMode: trigger.run.continuation.mode,
@@ -159,6 +161,11 @@ export function patchTriggerYaml(yaml: string, value: TriggerFormValue): string 
     ["run", "agent", "thinkingOptionId"],
     blankToUndefined(value.thinkingOptionId),
   );
+  setOptional(
+    document,
+    ["run", "agent", "backend"],
+    value.backend === undefined || value.backend === "local" ? undefined : value.backend,
+  );
   setOptional(document, ["run", "agent", "options"], parseProviderOptions(value.providerOptions));
   setIfChanged(document, ["run", "continuation"], formContinuation(value));
   setIfChanged(document, ["run", "max_runtime"], value.maxRuntime.trim());
@@ -215,6 +222,9 @@ export function createTriggerYaml(value: TriggerFormValue): string {
       run: {
         target: { daemon: value.daemon, cwd: value.cwd },
         agent: {
+          ...(value.backend === undefined || value.backend === "local"
+            ? {}
+            : { backend: value.backend }),
           provider: agent.provider,
           ...(agent.model === undefined ? {} : { model: agent.model }),
           mode: value.mode.trim(),
@@ -319,6 +329,7 @@ export function triggerFormErrors(value: TriggerFormValue): TriggerFieldErrors {
   }
   Object.assign(errors, recurrenceErrors(value));
   if (value.daemon.trim().length === 0) errors.daemon = "Daemon is required.";
+  Object.assign(errors, backendErrors(value.backend));
   Object.assign(errors, workingDirectoryErrors(value));
   if (value.maxRuntime.trim().length === 0) errors.maxRuntime = "Maximum runtime is required.";
   if (value.idleTimeout.trim().length === 0) errors.idleTimeout = "Idle timeout is required.";
@@ -506,4 +517,10 @@ export function describeTriggerEvent(
   }
   if (value === null || value.connection === "") return { kind };
   return { kind, detail: value.connection };
+}
+
+function backendErrors(backend: string | undefined): TriggerFieldErrors {
+  return backend !== undefined && !/^[a-z][a-z0-9_-]*$/u.test(backend)
+    ? { backend: "Use a configured backend ID starting with a lowercase letter." }
+    : {};
 }

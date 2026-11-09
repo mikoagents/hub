@@ -21,8 +21,8 @@ test("app setup hands off to a daemon, and the daemon that connects opens the da
 
     // A self-hosted Hub has to be named, and the only address that is certainly reachable is the
     // one the operator is already looking at.
-    await handoff.expectCommand(`paseo hub login ${origin}`);
-    expect(await handoff.copyCommand()).toBe(`paseo hub login ${origin}`);
+    await handoff.expectCommand(`miko hub login ${origin}`);
+    expect(await handoff.copyCommand()).toBe(`miko hub login ${origin}`);
     await handoff.accessible();
 
     // The command sends the operator to a terminal, and the terminal sends a browser back here.

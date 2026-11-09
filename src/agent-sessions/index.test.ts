@@ -17,7 +17,14 @@ class TestAgents implements AgentConnection {
   restorations = 0;
   async create(_key: string, options: DaemonCreateAgentOptions) {
     this.creates.push(options);
-    const agent = { id: randomUUID(), workspaceId: randomUUID(), status: "idle" as const };
+    const agent = {
+      id: randomUUID(),
+      workspaceId: randomUUID(),
+      status: "idle" as const,
+      backend: options.backend ?? "local",
+      provider: options.provider,
+      nativeAgentId: "native-agent",
+    };
     this.agents.set(agent.id, agent);
     return agent;
   }

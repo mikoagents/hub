@@ -51,6 +51,10 @@ const AuthoredInputSchema = z
 
 const AgentSchema = z
   .object({
+    backend: z
+      .string()
+      .regex(/^[a-z][a-z0-9_-]*$/)
+      .optional(),
     provider: z.string().min(1),
     model: z.string().min(1).optional(),
     mode: z.string().min(1).optional(),
@@ -227,6 +231,7 @@ export type CompiledPromptBlock =
   | { kind: "partial"; path: string; content: string; contentHash: string };
 
 export interface CompiledAgent {
+  backend?: string | undefined;
   provider: string;
   model?: string | undefined;
   mode?: string | undefined;
@@ -341,6 +346,10 @@ const CompiledPromptBlockSchema: z.ZodType<CompiledPromptBlock> = z.union([
 
 const CompiledAgentSchema: z.ZodType<CompiledAgent> = z
   .object({
+    backend: z
+      .string()
+      .regex(/^[a-z][a-z0-9_-]*$/)
+      .optional(),
     provider: z.string().min(1),
     model: z.string().min(1).optional(),
     mode: z.string().min(1).optional(),

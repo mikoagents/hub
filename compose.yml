@@ -15,7 +15,8 @@ services:
       - postgres-data:/var/lib/postgresql/data
 
   hub:
-    image: ghcr.io/getpaseo/hub:latest
+    build: .
+    image: miko-hub:local
     pull_policy: always
     restart: unless-stopped
     depends_on:

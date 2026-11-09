@@ -20,9 +20,12 @@ npm run test:e2e:browser
 npm run test:e2e:hub:source
 ```
 
-The source-built browser and Hub suites use the exact Paseo commit in `PASEO_E2E_COMMIT`.
-When a Hub change depends on a Paseo protocol or CLI change, update that immutable SHA and
-prove the combined contract before merging. Do not replace it with a branch or another mutable
+Set `DOCKER_SMOKE_SUBNET` to an unused CIDR when the local Docker default address pool is exhausted.
+
+The source-built browser and Hub suites use the exact Miko daemon commit in `MIKO_E2E_COMMIT`.
+When a Hub change depends on a Miko protocol or CLI change, update that immutable SHA and
+prove the combined contract before merging. `miko-compatibility.json` and the vendored execution
+schema must match that pin; see [the execution boundary](docs/miko-execution.md). Do not replace it with a branch or another mutable
 reference.
 
 Use the repository formatter through `npm run format` or `npm run format:files`. This repository

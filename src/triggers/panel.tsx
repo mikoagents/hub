@@ -23,6 +23,7 @@ import { Steps } from "../components/app/steps.js";
 import { SegmentedControl, type SegmentedOption } from "../components/app/segmented-control.js";
 import { StatusPill, statusLabel } from "../components/app/status-pill.js";
 import { TwoLine } from "../components/app/two-line.js";
+import { Input } from "../components/ui/input.js";
 import { Button } from "../components/ui/button.js";
 import { Textarea } from "../components/ui/textarea.js";
 import { SiteHeaderActions } from "../shell/site-header-actions.js";
@@ -45,7 +46,6 @@ import type { HubProviderSnapshotEntry } from "../hub/protocol.js";
 import { EventFields } from "./event-fields.js";
 import { EDITOR_EVENTS, eventDefinition, parseEditorEvent } from "./configuration/events.js";
 import { selectedProviderModel } from "./provider-catalog.js";
-import { supportsUnattendedRuns } from "./configuration/unattended.js";
 import { useTriggerStatusFilter } from "./status-filter.js";
 
 type BrowserTrigger = TriggerSnapshot["triggers"][number];
@@ -638,6 +638,7 @@ function TriggerForm({
     snapshot.organization.slug,
     selectedDaemon?.id,
     form.cwd,
+    form.backend ?? "local",
   );
   return (
     <div className="grid gap-6">
@@ -785,6 +786,7 @@ function TriggerForm({
                       onChange({
                         ...form,
                         daemon: option.value,
+                        backend: "local",
                         agent: "",
                         mode: "",
                         thinkingOptionId: "",
@@ -794,6 +796,31 @@ function TriggerForm({
                   />
                 )}
               </FormField>
+              {selectedDaemon === undefined ? null : (
+                <FormField
+                  id="trigger-backend"
+                  label="Execution backend"
+                  description="Backend ID configured on this Miko daemon. Use local for this machine."
+                  {...fieldError(errors, "backend")}
+                >
+                  {(control) => (
+                    <Input
+                      {...control}
+                      value={form.backend ?? "local"}
+                      onChange={(event) =>
+                        onChange({
+                          ...form,
+                          backend: event.target.value,
+                          agent: "",
+                          mode: "",
+                          thinkingOptionId: "",
+                          providerOptions: "",
+                        })
+                      }
+                    />
+                  )}
+                </FormField>
+              )}
               {selectedDaemon === undefined ? null : (
                 <div className="grid gap-4 sm:grid-cols-2">
                   <FormField
@@ -1159,7 +1186,7 @@ function ProviderCatalogFields({
   // A provider the daemon cannot run unattended is not offered: Hub sends a tool policy with every
   // run, and the daemon refuses the policy at launch for any provider outside that set.
   const agentOptions = (entries ?? []).flatMap((entry) =>
-    entry.status !== "ready" || !entry.enabled || !supportsUnattendedRuns(entry.provider)
+    entry.status !== "ready" || !entry.enabled || entry.supportsExactMcpPreapproval !== true
       ? []
       : (entry.models ?? [])
           .filter((model) => model.isSelectable !== false)
@@ -1183,7 +1210,7 @@ function ProviderCatalogFields({
       <FormField
         id="trigger-agent"
         label="Agent"
-        description="Models the selected daemon can run unattended: Claude, Codex, or OpenCode."
+        description="Models on this backend that declare support for unattended execution."
         required
         {...fieldError(errors, "agent")}
       >
@@ -1250,16 +1277,18 @@ function useDaemonProviderCatalog(
   organizationSlug: string,
   daemonId: string | undefined,
   cwd: string,
+  backend = "local",
 ) {
   const load = useServerFn(daemonProviderSnapshot);
-  const queryKey = ["daemon-provider-snapshot", organizationSlug, daemonId, cwd] as const;
-  const enabled = daemonId !== undefined && cwd.trim() !== "";
+  const queryKey = ["daemon-provider-snapshot", organizationSlug, daemonId, cwd, backend] as const;
+  const enabled =
+    daemonId !== undefined && cwd.trim() !== "" && /^[a-z][a-z0-9_-]*$/u.test(backend);
   const query = useSnapshotQuery({
     queryKey,
     enabled,
     queryFn: () =>
       load({
-        data: { organizationSlug, daemonId: daemonId!, cwd: cwd.trim(), refresh: true },
+        data: { organizationSlug, daemonId: daemonId!, cwd: cwd.trim(), backend, refresh: true },
       }),
   });
   const entries = query.data?.entries;

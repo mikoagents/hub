@@ -941,7 +941,7 @@ describe("durable multi-step workflow engine", () => {
     assert.equal(dispatches[1]?.prompt, "investigate the routing failure");
     assert.deepEqual(dispatches[1]?.agent, {
       provider: "codex",
-      model: "gpt-5.5",
+      model: "gpt-5.6-sol",
       thinkingOptionId: "xhigh",
       options: {
         sandbox_workspace_write: {
