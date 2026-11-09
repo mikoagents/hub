@@ -15,9 +15,9 @@
 > [!WARNING]
 > Paseo Hub is in early development. Expect breaking changes and data loss. [Join the Paseo Discord](https://discord.gg/jz8T2uahpH) to learn more about the project.
 
-Paseo Hub is the self-hosted automation layer for [Paseo](https://paseo.sh). Connect the services where work arrives and run agents on the machines where your development environments already live.
+Paseo Hub is the self-hosted automation layer for [Miko execution daemons](https://github.com/mikoagents/miko-daemon). Connect the services where work arrives and run agents on the machines where your development environments already live.
 
-- **Your machines:** Hub dispatches to Miko daemons on your laptop, devbox, or build server, with optional existing Paseo service backends.
+- **Your machines:** Hub dispatches to Miko daemons on your laptop, devbox, or build server, using each daemon's configured providers.
 - **Your configuration:** Keep triggers, environments, permissions, and prompts in version control.
 - **Your services:** Start agents from GitHub, Linear, Slack, Discord, or manual runs.
 - **One audit trail:** See every event, configuration revision, execution, and result.

@@ -2300,7 +2300,7 @@ class TestDaemon {
       headers: {
         authorization: `Bearer ${this.credential}`,
         "x-paseo-daemon-id": this.daemonId,
-        "x-miko-execution-protocol": "1.0.0",
+        "x-miko-execution-protocol": "2.0.0",
       },
     });
     socket.on("message", (data) => this.receive(data));
@@ -2318,7 +2318,7 @@ class TestDaemon {
         headers: {
           authorization: `Bearer ${secret}`,
           "x-paseo-daemon-id": this.daemonId,
-          "x-miko-execution-protocol": "1.0.0",
+          "x-miko-execution-protocol": "2.0.0",
         },
       });
       socket.once("unexpected-response", (_request, response) => {

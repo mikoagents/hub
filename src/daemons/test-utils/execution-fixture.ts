@@ -83,7 +83,6 @@ function bind(value: unknown) {
   const agent = z.record(z.string(), z.unknown()).parse(value);
   return {
     ...agent,
-    backend: agent["backend"] ?? "local",
     provider: agent["provider"] ?? "codex",
     nativeAgentId: agent["id"],
   };

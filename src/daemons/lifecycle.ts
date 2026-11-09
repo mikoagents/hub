@@ -1,4 +1,5 @@
 import { DaemonAgentError } from "./agents/index.js";
+import { executionLogEvent } from "./execution-log.js";
 import { AgentSessions, AgentSessionError } from "../agent-sessions/index.js";
 import type { AgentEvent } from "./agents/index.js";
 import {
@@ -27,7 +28,7 @@ import {
 } from "../dispatcher/launch-machine-intent.js";
 import { logger as defaultLogger } from "../logger.js";
 import { reportFailure } from "../failures/index.js";
-import { iterationFailure } from "../workflows/iterations.js";
+import { completionFailure, completionErrorSchema } from "../agent-executions/completion.js";
 import type { TriggerProvider } from "../triggers/index.js";
 import type { ExecutionAuthority } from "../execution-authority/index.js";
 import { OutputExecutorRegistry } from "../execution-capabilities/outputs.js";
@@ -850,6 +851,7 @@ export class DaemonDispatchLifecycle {
       executionId: string;
       token: string;
       output?: unknown;
+      error?: string;
     },
     options: { deferHubAction?: boolean } = {},
   ): Promise<AgentExecutionRecord> {
@@ -881,20 +883,20 @@ export class DaemonDispatchLifecycle {
       throw new AgentExecutionCompletionFailure("expired");
     }
 
-    if (currentExecution.launchIntent?.outputSchema !== undefined) {
-      validateStructuredOutput(currentExecution.launchIntent.outputSchema, input.output);
-    }
+    validateCompletionResult(currentExecution, input);
     this.clearExecutionDeadline(input.executionId);
     const execution = await this.completeAgentExecution(input.executionId, {
       completedByAgent: true,
       ...(options.deferHubAction === undefined ? {} : { deferHubAction: options.deferHubAction }),
       ...(input.output === undefined ? {} : { output: input.output }),
+      ...completionErrorField(input.error),
     });
     if (options.deferHubAction === true && execution.hubAction === "archive") {
       await this.reconcileHubActionSafely(execution);
     }
     const expectedStatus =
-      iterationFailure(currentExecution.launchIntent?.iteration, input.output) === undefined
+      completionFailure(currentExecution.launchIntent?.iteration, input.output, input.error) ===
+      undefined
         ? "succeeded"
         : "failed";
     if (execution.status !== expectedStatus) {
@@ -1122,7 +1124,12 @@ export class DaemonDispatchLifecycle {
 
   private async completeAgentExecution(
     executionId: string,
-    options: { completedByAgent?: boolean; output?: unknown; deferHubAction?: boolean } = {},
+    options: {
+      completedByAgent?: boolean;
+      output?: unknown;
+      error?: string;
+      deferHubAction?: boolean;
+    } = {},
   ): Promise<AgentExecutionRecord> {
     const existing = await this.options.database.findAgentExecutionById(executionId);
     if (existing === undefined) throw new Error(`agent execution not found: ${executionId}`);
@@ -1130,20 +1137,21 @@ export class DaemonDispatchLifecycle {
       existing.launchIntent?.outputSchema === undefined || options.output === undefined
         ? undefined
         : jsonValue(options.output);
-    const failureReason = iterationFailure(existing.launchIntent?.iteration, options.output);
+    const failureReason = completionFailure(
+      existing.launchIntent?.iteration,
+      options.output,
+      options.error,
+    );
     const status = failureReason === undefined ? "succeeded" : "failed";
     const transition = await this.transitionTerminalAgentExecution(
       executionId,
       status,
       {
-        result:
-          structuredOutput === undefined
-            ? { status }
-            : {
-                status,
-                output: options.output,
-                ...(failureReason === undefined ? {} : { reason: failureReason }),
-              },
+        result: {
+          status,
+          ...(structuredOutput === undefined ? {} : { output: options.output }),
+          ...(failureReason === undefined ? {} : { reason: failureReason }),
+        },
         completedByAgent: options.completedByAgent === true,
       },
       {
@@ -1633,7 +1641,10 @@ export class DaemonDispatchLifecycle {
     const previous = this.pendingStreamHandlersByExecution.get(executionId) ?? Promise.resolve();
     const current = previous
       .catch(() => undefined)
-      .then(async () => this.handleDaemonEvent(executionId, daemonId, event, source));
+      .then(async () => {
+        await this.recordExecutionEvent(executionId, event, source);
+        return this.handleDaemonEvent(executionId, daemonId, event, source);
+      });
     this.pendingStreamHandlersByExecution.set(executionId, current);
     const clearCurrent = () => {
       if (this.pendingStreamHandlersByExecution.get(executionId) === current) {
@@ -1642,6 +1653,39 @@ export class DaemonDispatchLifecycle {
     };
     void current.then(clearCurrent, clearCurrent);
     return current;
+  }
+
+  private async recordExecutionEvent(
+    executionId: string,
+    event: DaemonEvent,
+    source: "live" | "snapshot",
+  ): Promise<void> {
+    if (source !== "live") return;
+    try {
+      const execution = await this.options.database.findAgentExecutionById(executionId);
+      const secrets =
+        this.options.completionTokenSecret === undefined
+          ? []
+          : [
+              deriveAgentExecutionCompletionToken(this.options.completionTokenSecret, executionId),
+              ...(execution?.agentSessionId == null
+                ? []
+                : [
+                    deriveAgentExecutionCompletionToken(
+                      this.options.completionTokenSecret,
+                      `session:${execution.agentSessionId}`,
+                    ),
+                  ]),
+            ];
+      await this.options.database.appendAgentExecutionLog({
+        executionId,
+        recordedAt: new Date(event.timestamp),
+        event: executionLogEvent(event, secrets),
+      });
+    } catch (error) {
+      // Observability must not prevent an execution from reaching its completion contract.
+      this.report(error, "daemon.execution.log", { executionId });
+    }
   }
 
   private armExecutionDeadline(execution: AgentExecutionRecord): void {
@@ -1853,6 +1897,25 @@ function executionFailureReason(execution: AgentExecutionRecord | undefined): st
   return typeof reason === "string" ? reason : undefined;
 }
 
+function completionErrorField(error: string | undefined): { error?: string } {
+  return error === undefined ? {} : { error };
+}
+
+function validateCompletionResult(
+  execution: AgentExecutionRecord,
+  result: { output?: unknown; error?: string },
+): void {
+  if (result.error !== undefined) {
+    completionErrorSchema.parse(result.error);
+    if (result.output !== undefined)
+      throw new Error("Failure completion cannot include successful output");
+    return;
+  }
+  if (execution.launchIntent?.outputSchema !== undefined) {
+    validateStructuredOutput(execution.launchIntent.outputSchema, result.output);
+  }
+}
+
 function validateStructuredOutput(schema: JsonValue, output: unknown): asserts output is JsonValue {
   const validator = compileJsonSchema(schema).validate;
   if (!isJsonValue(output))
@@ -1959,7 +2022,6 @@ async function buildCreateAgentOptions(
   materializedEnv: Readonly<Record<string, string>>,
 ): Promise<DaemonCreateAgentOptions> {
   return {
-    ...(intent.agent.backend === undefined ? {} : { backend: intent.agent.backend }),
     provider: intent.agent.provider,
     background: intent.background,
     title: EXECUTION_AGENT_TITLE,

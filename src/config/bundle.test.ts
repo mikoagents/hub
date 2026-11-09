@@ -83,6 +83,14 @@ function hasBundleIssue(error: unknown, path: string, message: RegExp): boolean 
 }
 
 describe("Hub configuration bundle", () => {
+  it("rejects backend selection in named providers", () => {
+    assert.throws(() =>
+      compileHubBundle(
+        filesWithHub(hub.replace("provider: codex", "provider: codex\n    backend: local")),
+      ),
+    );
+  });
+
   it("accepts an optional project name as slug-validated deployment metadata", () => {
     const bundle = compileHubBundle(filesWithHub(`name: agent-tools\n${hub}`));
 

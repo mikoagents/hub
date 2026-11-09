@@ -3,6 +3,7 @@ import {
   fixtureResponse,
   handleFixtureReceipt,
 } from "../../src/daemons/test-utils/execution-fixture.js";
+import { EXECUTION_PROTOCOL_HEADER, EXECUTION_PROTOCOL_VERSION } from "../../src/miko/protocol.js";
 import { createHash, createHmac, randomUUID } from "node:crypto";
 import {
   expect,
@@ -5461,7 +5462,7 @@ class ContractDaemon {
       headers: {
         authorization: `Bearer ${this.credential}`,
         "x-paseo-daemon-id": this.daemonId,
-        "x-miko-execution-protocol": "1.0.0",
+        [EXECUTION_PROTOCOL_HEADER]: EXECUTION_PROTOCOL_VERSION,
       },
     });
     socket.on("message", (data) => this.acceptExecution(data));
@@ -5598,7 +5599,11 @@ class ContractDaemon {
   private acceptHello(value: unknown): boolean {
     if (!z.object({ type: z.literal("miko.hello") }).safeParse(value).success) return false;
     this.socket?.send(
-      JSON.stringify({ type: "miko.ready", version: "1.0.0", permissions: ["hub.execute"] }),
+      JSON.stringify({
+        type: "miko.ready",
+        version: EXECUTION_PROTOCOL_VERSION,
+        permissions: ["hub.execute"],
+      }),
     );
     return true;
   }

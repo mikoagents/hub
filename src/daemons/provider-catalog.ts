@@ -17,7 +17,7 @@ export class DaemonProviderCatalog {
       organizationSlug: string;
       daemonId: string;
       cwd?: string;
-      backend?: string;
+
       refresh?: boolean;
     },
   ): Promise<HubProviderSnapshot> {
@@ -31,10 +31,7 @@ export class DaemonProviderCatalog {
     if (daemon?.status !== "active") throw new Error("daemon_unavailable");
     const connection = this.connectionForDaemon(daemon.id);
     if (connection === undefined) throw new Error("daemon_not_connected");
-    const scope = {
-      ...(input.cwd === undefined ? {} : { cwd: input.cwd }),
-      ...(input.backend === undefined ? {} : { backend: input.backend }),
-    };
+    const scope = input.cwd === undefined ? {} : { cwd: input.cwd };
     if (input.refresh === true) await connection.refreshProviderSnapshot(scope);
     return await connection.getProviderSnapshot(scope);
   }

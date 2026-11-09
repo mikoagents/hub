@@ -144,6 +144,7 @@ missing app component.
 | `FormActions`                                                           | The button row under a form: stacks on phones, right-aligns from `sm`.              |
 | `AuthForm`                                                              | A pre-auth form: fields, submit, optional secondary action, busy state.             |
 | `AuthActions`                                                           | The buttons under a pre-auth card with no form left to submit. Never `FormActions`. |
+| `DetailDialog`, `DetailDialogTrigger`                                   | Inspect a record in a wide, scrollable dialog and return focus to its trigger.      |
 | `FormDialog`                                                            | A dialog whose body is one form with one submit.                                    |
 | `ConfirmAction`, `ConfirmMenuItem`                                      | Ask before something irreversible.                                                  |
 | `FailureAlert`, `NoticeAlert`                                           | Show a failed request, or a neutral or success notice as a polite live region.      |

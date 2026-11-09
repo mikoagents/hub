@@ -109,7 +109,6 @@ interface ManagedChild {
 
 interface HubE2EOptions {
   realAgent?: boolean;
-  nativeBackend?: boolean;
 }
 
 export interface SourceCliBundleDeploymentEvidence {
@@ -143,7 +142,6 @@ export interface ShutdownEvidence {
 export class HubE2E {
   private root = "";
   private source: SourcePaseo | undefined;
-  private nativeOwner: SourcePaseo | undefined;
   private workspace = "";
   private hubOrigin = "";
   private proxy: HubFaultProxy | undefined;
@@ -420,11 +418,6 @@ export class HubE2E {
       "          provider: hub-e2e",
       '        prompt: [{ text: "daemon-restart" }] ',
     ].join("\n");
-    if (this.options.nativeBackend)
-      yaml = yaml.replaceAll(
-        "          provider: hub-e2e",
-        "          provider: hub-e2e\n          backend: existing",
-      );
     const response = await fetch(`${this.requireProxy().origin}/api/v1/configurations/install`, {
       method: "POST",
       headers: {
@@ -938,7 +931,7 @@ export class HubE2E {
         agentId: string;
         workspaceId: string;
         daemonId: string;
-        runtimeBinding: { backend: string; provider: string; nativeAgentId: string };
+        runtimeBinding: { provider: string; nativeAgentId: string };
       };
     }>(
       `select s.data from agent_sessions s join agent_executions e on e.agent_session_id = s.id where e.id = $1`,
@@ -1264,35 +1257,6 @@ export class HubE2E {
     );
   }
 
-  async nativeBackendEvidence(executionId: string) {
-    if (!this.nativeOwner) throw new Error("Native backend was not started");
-    const session = await this.sessionEvidence(executionId);
-    const records = async (source: SourcePaseo) => {
-      const root = join(source.paths.paseoHome, "agents"),
-        files = await readdir(root, { recursive: true }).catch(() => []);
-      const values = await Promise.all(
-        files
-          .filter((file) => file.endsWith(".json"))
-          .map(
-            async (file) =>
-              PersistedDaemonAgentSchema.safeParse(
-                JSON.parse(await readFile(join(root, file), "utf8")),
-              ).data,
-          ),
-      );
-      return values.filter((value) => value !== undefined);
-    };
-    const [owner, local] = await Promise.all([
-      records(this.nativeOwner),
-      records(this.requireSource()),
-    ]);
-    return {
-      backend: session.runtimeBinding.backend,
-      nativeOwnerHasAgent: owner.some((agent) => agent.id === session.runtimeBinding.nativeAgentId),
-      localAgents: local.length,
-    };
-  }
-
   async stop(): Promise<ShutdownEvidence> {
     if (this.stopped)
       return {
@@ -1323,13 +1287,6 @@ export class HubE2E {
       ownedProcessDescriptions.push(`daemon: ${description}`);
     }
     for (const pid of sourceEvidence?.leakedProcesses ?? []) ownedProcesses.add(pid);
-    const nativeEvidence = await this.nativeOwner?.stop().catch((error) => {
-      failures.push(error);
-      return undefined;
-    });
-    for (const description of nativeEvidence?.ownedProcesses ?? [])
-      ownedProcessDescriptions.push(`native-service: ${description}`);
-    for (const pid of nativeEvidence?.leakedProcesses ?? []) ownedProcesses.add(pid);
     await this.stopOwnedChild(
       this.completionRunner,
       ownedProcesses,
@@ -1428,28 +1385,12 @@ export class HubE2E {
       "Hub child to become healthy",
     );
     MACHINE_KEY = (await readFile(this.machineKeyFile, "utf8")).trim();
-    if (this.options.nativeBackend)
-      this.nativeOwner = await SourcePaseo.start({
-        config: ({ packagesRoot, daemonHost }) => this.paseoConfig(packagesRoot, daemonHost),
-      });
     this.source = await SourcePaseo.start({
       root: this.root,
       paseoHome: join(this.root, "paseo-home"),
       daemonHost: this.daemonHost,
       config: ({ packagesRoot, daemonHost }) => this.paseoConfig(packagesRoot, daemonHost),
     });
-    if (this.nativeOwner)
-      await writeFile(
-        join(this.source.paths.paseoHome, "miko-backends.json"),
-        JSON.stringify({
-          existing: {
-            type: "paseo",
-            url: `ws://${this.nativeOwner.paths.daemonHost}/ws`,
-            token: "isolated-loopback-native-service",
-          },
-        }),
-        { mode: 0o600 },
-      );
   }
 
   private async startHub(): Promise<ManagedChild> {

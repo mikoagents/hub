@@ -156,15 +156,13 @@ export type HubProviderSnapshot = z.infer<typeof ProviderSnapshotSchema>;
 export type HubProviderSnapshotEntry = z.infer<typeof ProviderSnapshotEntrySchema>;
 
 // This protocol is versioned independently of Paseo's native session protocol.
-export const EXECUTION_PROTOCOL_VERSION = "1.0.0" as const;
+export const EXECUTION_PROTOCOL_VERSION = "2.0.0" as const;
 export const EXECUTION_PROTOCOL_HEADER = "x-miko-execution-protocol";
-export const BackendIdSchema = z.string().regex(/^[a-z][a-z0-9_-]*$/);
 export const AgentSnapshotSchema = z.object({
   id: z.string(),
   workspaceId: z.string(),
   status: AgentStatusSchema,
   archivedAt: z.unknown().optional(),
-  backend: BackendIdSchema,
   provider: z.string(),
   nativeAgentId: z.string(),
 });
@@ -185,7 +183,6 @@ export const AgentEventSchema = z.discriminatedUnion("type", [
 export type AgentEvent = z.infer<typeof AgentEventSchema>;
 export const CreateOptionsSchema = z
   .object({
-    backend: BackendIdSchema.default("local"),
     provider: z.string(),
     title: z.string().optional(),
     workspaceTitle: z.string().optional(),
@@ -227,7 +224,6 @@ export const CreateOptionsSchema = z
 export type CreateOptions = z.infer<typeof CreateOptionsSchema>;
 export const ValidationSchema = z
   .object({
-    backend: BackendIdSchema.default("local"),
     provider: z.string(),
     model: z.string().optional(),
     mode: z.string().optional(),
@@ -254,11 +250,8 @@ const ControlInputSchema = ReadInputSchema.extend({
   workspaceId: z.string().min(1),
   key: z.string().min(1),
 }).strict();
-const ProviderInputSchema = z
-  .object({ backend: BackendIdSchema.optional(), cwd: z.string().optional() })
-  .strict();
+const ProviderInputSchema = z.object({ cwd: z.string().optional() }).strict();
 export const RequestSchema = z.discriminatedUnion("operation", [
-  RequestEnvelopeSchema.extend({ operation: z.literal("discover"), input: z.object({}).strict() }),
   RequestEnvelopeSchema.extend({ operation: z.literal("providers"), input: ProviderInputSchema }),
   RequestEnvelopeSchema.extend({
     operation: z.literal("refresh"),

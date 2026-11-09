@@ -84,7 +84,6 @@ export class AgentSessions {
         settings: policy?.compatibility,
         tools,
         daemonId: input.intent.environment.daemonId,
-        backend: executionBackend(input.intent.agent),
         provider: input.intent.agent.provider,
       });
       let session = await findSession();
@@ -151,7 +150,6 @@ export class AgentSessions {
           agentId: agent.id,
           workspaceId: agent.workspaceId,
           runtimeBinding: {
-            backend: agent.backend,
             provider: agent.provider,
             nativeAgentId: agent.nativeAgentId,
           },
@@ -305,13 +303,8 @@ function assertRuntimeBinding(
   const binding = session.runtimeBinding;
   if (
     !binding ||
-    binding.backend !== agent.backend ||
     binding.provider !== agent.provider ||
     binding.nativeAgentId !== agent.nativeAgentId
   )
     throw new AgentSessionError("session_binding_mismatch");
-}
-
-function executionBackend(agent: { backend?: string | undefined }): string {
-  return agent.backend ?? "local";
 }

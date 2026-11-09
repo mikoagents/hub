@@ -25,14 +25,12 @@ const daemonIdSchema = z.object({ daemonId: z.string().uuid() });
 const organizationScopeSchema = z.object({ organizationSlug: z.string().min(1) });
 const scopedRenameSchema = organizationScopeSchema.extend(renameSchema.shape);
 const scopedDaemonIdSchema = organizationScopeSchema.extend(daemonIdSchema.shape);
-const providerSnapshotSchema = scopedDaemonIdSchema.extend({
-  cwd: z.string().trim().min(1).optional(),
-  backend: z
-    .string()
-    .regex(/^[a-z][a-z0-9_-]*$/)
-    .optional(),
-  refresh: z.boolean().optional(),
-});
+const providerSnapshotSchema = scopedDaemonIdSchema
+  .extend({
+    cwd: z.string().trim().min(1).optional(),
+    refresh: z.boolean().optional(),
+  })
+  .strict();
 
 export type BrowserDaemon = z.infer<typeof daemonSchema>;
 export type BrowserDaemonList = z.infer<typeof daemonListSchema>;
@@ -50,7 +48,6 @@ export const daemonProviderSnapshot = createServerFn({ method: "GET" })
         await catalog.read(getRequest(), {
           organizationSlug: data.organizationSlug,
           daemonId: data.daemonId,
-          ...(data.backend === undefined ? {} : { backend: data.backend }),
           ...(data.cwd === undefined ? {} : { cwd: data.cwd }),
           ...(data.refresh === undefined ? {} : { refresh: data.refresh }),
         }),

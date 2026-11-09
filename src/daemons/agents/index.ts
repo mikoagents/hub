@@ -140,10 +140,10 @@ export class DaemonAgents implements AgentConnection {
       }
     };
   }
-  async providers(options: { cwd?: string; backend?: string }) {
+  async providers(options: { cwd?: string }) {
     return ProviderSnapshotSchema.parse(await this.request("providers", options));
   }
-  async refresh(options: { cwd?: string; backend?: string; providers?: string[] }): Promise<void> {
+  async refresh(options: { cwd?: string; providers?: string[] }): Promise<void> {
     await this.request("refresh", options);
   }
   async validate(agent: import("../../config/compiler.js").CompiledAgent) {

@@ -207,7 +207,8 @@ describe("execution capability MCP boundary", () => {
         [
           {
             name: "finish_execution",
-            description: "Completes this execution and records the configured structured output.",
+            description:
+              "Completes this execution and records the configured structured output. If the requested work could not be completed, pass error with the reason instead of claiming success.",
           },
           {
             name: "reply",
@@ -218,15 +219,26 @@ describe("execution capability MCP boundary", () => {
       );
       assert.equal(
         exposedTools.tools.find((tool) => tool.name === "finish_execution")?.description,
-        "Completes this execution and records the configured structured output.",
+        "Completes this execution and records the configured structured output. If the requested work could not be completed, pass error with the reason instead of claiming success.",
       );
       assert.deepEqual(
         exposedTools.tools.find((tool) => tool.name === "finish_execution")?.inputSchema,
         {
           type: "object",
           additionalProperties: false,
-          required: ["output"],
+          if: { type: "object", properties: { error: {} }, required: ["error"] },
+          // oxlint-disable-next-line unicorn/no-thenable -- JSON Schema conditional keyword, not a promise method
+          then: { not: { type: "object", properties: { output: {} }, required: ["output"] } },
+          else: { type: "object", properties: { output: {} }, required: ["output"] },
           properties: {
+            error: {
+              type: "string",
+              minLength: 1,
+              maxLength: 2000,
+              pattern: "\\S",
+              description:
+                "Report unsuccessful work with its reason. Omit output when reporting failure.",
+            },
             output: {
               $id: "urn:paseo:hub:finish-execution-output",
               type: "object",
@@ -420,8 +432,19 @@ describe("execution capability MCP boundary", () => {
     assert.deepEqual(tool?.inputSchema, {
       type: "object",
       additionalProperties: false,
-      required: ["output"],
+      if: { type: "object", properties: { error: {} }, required: ["error"] },
+      // oxlint-disable-next-line unicorn/no-thenable -- JSON Schema conditional keyword, not a promise method
+      then: { not: { type: "object", properties: { output: {} }, required: ["output"] } },
+      else: { type: "object", properties: { output: {} }, required: ["output"] },
       properties: {
+        error: {
+          type: "string",
+          minLength: 1,
+          maxLength: 2000,
+          pattern: "\\S",
+          description:
+            "Report unsuccessful work with its reason. Omit output when reporting failure.",
+        },
         output: {
           $id: "urn:paseo:hub:finish-execution-output",
           $schema: "http://json-schema.org/draft-07/schema#",
@@ -508,6 +531,50 @@ describe("execution capability MCP boundary", () => {
 
     assert.equal(ToolResultSchema.parse(response.result).isError, true);
     assert.deepEqual(fixture.completions, [{ executionId: fixture.executionId, token: "token" }]);
+  });
+
+  it("records an explicit failure even when successful output and delivery are unavailable", async () => {
+    const fixture = await capabilityFixture(
+      undefined,
+      "failed",
+      1,
+      { type: "object", required: ["reviewUrl"], properties: { reviewUrl: { type: "string" } } },
+      false,
+      ["slack.reply"],
+    );
+    const error = "Trusted review tool returned Operation not permitted; no review was published";
+
+    const response = await fixture.call("tools/call", {
+      name: "finish_execution",
+      arguments: { error },
+    });
+
+    assert.equal(ToolResultSchema.parse(response.result).isError, undefined);
+    assert.deepEqual(fixture.completions, [
+      { executionId: fixture.executionId, token: "token", error },
+    ]);
+    assert.equal(
+      (await fixture.database.findAgentExecutionById(fixture.executionId))?.status,
+      "failed",
+    );
+    assert.deepEqual(fixture.outbound, []);
+  });
+
+  it.each([
+    { error: "" },
+    { error: "   " },
+    { error: "x".repeat(2001) },
+    { error: "Cannot review", output: { reviewUrl: "https://github.test/review/1" } },
+  ])("rejects invalid or conflicting failure arguments %j", async (args) => {
+    const fixture = await capabilityFixture();
+
+    const response = await fixture.call("tools/call", {
+      name: "finish_execution",
+      arguments: args,
+    });
+
+    assert.equal(ToolResultSchema.parse(response.result).isError, true);
+    assert.deepEqual(fixture.completions, []);
   });
 
   it("keeps finish recoverable until a required output is emitted", async () => {
@@ -767,6 +834,7 @@ async function capabilityFixture(
     executionId: string;
     token: string;
     output?: unknown;
+    error?: string;
   }> = [];
   const server = createExecutionCapabilityServer({
     database,

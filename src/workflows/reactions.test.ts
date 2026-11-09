@@ -87,6 +87,17 @@ describe("workflow-owned provider reactions", () => {
     assert.equal(result.run.status, "succeeded");
   });
 
+  it("marks reported review failures as failed without adding a success reaction", async () => {
+    const result = await runTwoStepWorkflow(createGitHubReactionFixture(), {
+      outcome: "agent_failure",
+    });
+
+    assert.equal(result.run.status, "failed");
+    assert.match(result.run.failureReason ?? "", /Operation not permitted/u);
+    assert.deepEqual(result.visible(), ["-1"]);
+    assert.deepEqual(result.calls(), { created: ["eyes", "-1"], deleted: [1] });
+  });
+
   it.each(["step_failure", "timeout", "prelaunch_failure"] as const)(
     "converges %s to one terminal workflow reaction",
     async (outcome) => {
@@ -225,7 +236,7 @@ function createGitHubReactionFixture() {
   };
 }
 
-type WorkflowOutcome = "step_failure" | "timeout" | "prelaunch_failure";
+type WorkflowOutcome = "step_failure" | "timeout" | "prelaunch_failure" | "agent_failure";
 
 interface WorkflowScenarioOptions {
   outcome?: WorkflowOutcome;
@@ -334,7 +345,6 @@ async function runTwoStepWorkflow<
         return {
           id: key,
           workspaceId: "workspace",
-          backend: "local",
           provider: "codex",
           nativeAgentId: "native-agent",
           status: "idle",
@@ -343,7 +353,6 @@ async function runTwoStepWorkflow<
       get: async (id) => ({
         id,
         workspaceId: "workspace",
-        backend: "local",
         provider: "codex",
         nativeAgentId: "native-agent",
         status: "idle",
@@ -388,6 +397,15 @@ async function runTwoStepWorkflow<
     await engine.processAvailable();
     if (options.skipAllSteps === true) {
       await waitForTerminalRun(database, run.id);
+    } else if (options.outcome === "agent_failure") {
+      await completeStep(
+        database,
+        lifecycle,
+        run.id,
+        "first",
+        "Operation not permitted: trusted review tool",
+      );
+      await engine.processAvailable();
     } else if (options.outcome === "step_failure") {
       const first = await runningStepExecution(database, run.id, "first");
       assert.ok(first.machineId);
@@ -451,6 +469,7 @@ async function completeStep(
   lifecycle: DaemonDispatchLifecycle,
   triggerRunId: string,
   stepId: string,
+  error?: string,
 ): Promise<void> {
   const steps = await database.listWorkflowStepRunsForTriggerRun(triggerRunId);
   const step = steps.find((candidate) => candidate.stepId === stepId);
@@ -462,6 +481,7 @@ async function completeStep(
   await lifecycle.completeAgentExecutionFromCallback({
     executionId: execution.id,
     token: deriveAgentExecutionCompletionToken("reaction-secret", execution.id),
+    ...(error === undefined ? {} : { error }),
   });
 }
 

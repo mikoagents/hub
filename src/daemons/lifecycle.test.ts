@@ -1,4 +1,5 @@
 import type { LaunchMachineIntent } from "../dispatcher/launch-machine-intent.js";
+import { deriveAgentExecutionCompletionToken } from "../agent-executions/completion-token.js";
 import { DaemonResponseLostError } from "./protocol.js";
 import type { AgentConnection } from "./agents/index.js";
 import assert from "node:assert/strict";
@@ -128,7 +129,6 @@ describe("durable Hub action acknowledgement state", () => {
       const agent = {
         id: AGENT_ID,
         workspaceId: "workspace-reconnect",
-        backend: "local",
         provider: "codex",
         nativeAgentId: "native-agent",
         status: "idle" as const,
@@ -325,6 +325,42 @@ describe("durable Hub action acknowledgement state", () => {
     await lifecycle.stop();
   });
 
+  it("records observed events in order without changing completion or retaining Hub credentials", async () => {
+    const fixture = await acknowledgementFixture();
+    await fixture.lifecycle.recoverPendingHubActions(DAEMON_ID);
+    const token = deriveAgentExecutionCompletionToken("test-secret", "session:session");
+    const observedEvent = toolCall("shell-call", "shell", "completed");
+    if (observedEvent.type === "agent_stream" && observedEvent.event.type === "timeline") {
+      observedEvent.event.item.text = `Completed ${token}`;
+    }
+    await fixture.connection.emit(observedEvent);
+    await fixture.connection.emit(turnCompleted());
+    const entries = await fixture.database.listAgentExecutionLogs(EXECUTION_ID, "0", 100);
+    assert.deepEqual(
+      entries.map(({ event }) =>
+        event !== null && typeof event === "object" && "type" in event ? event["type"] : undefined,
+      ),
+      ["agent_stream", "agent_stream"],
+    );
+    assert.match(JSON.stringify(entries[0]?.event), /shell-call/u);
+    assert.match(JSON.stringify(entries[0]?.event), /Completed \[Redacted\]/u);
+    assert.equal(JSON.stringify(entries).includes(token), false);
+    await fixture.lifecycle.stop();
+  });
+
+  it("continues completion handling when recording an event fails", async () => {
+    const fixture = await acknowledgementFixture();
+    await fixture.lifecycle.recoverPendingHubActions(DAEMON_ID);
+    vi.spyOn(fixture.database, "appendAgentExecutionLog").mockRejectedValue(
+      new Error("storage unavailable"),
+    );
+    await fixture.connection.emit(toolCall("finish-call", "hub.finish_execution", "completed"));
+    await fixture.connection.emit(turnCompleted());
+    await fixture.connection.emit(agentIdle());
+    assert.deepEqual(fixture.connection.actions, ["archive"]);
+    await fixture.lifecycle.stop();
+  });
+
   it("ignores unrelated failed or canceled tools when finish_execution completes", async () => {
     const fixture = await acknowledgementFixture();
     await fixture.lifecycle.recoverPendingHubActions(DAEMON_ID);
@@ -421,7 +457,7 @@ async function acknowledgementFixture() {
     daemonId: DAEMON_ID,
     agentId: AGENT_ID,
     workspaceId: "workspace",
-    runtimeBinding: { backend: "local", provider: "codex", nativeAgentId: "native-agent" },
+    runtimeBinding: { provider: "codex", nativeAgentId: "native-agent" },
     compatibility: "test",
     capabilityTokenHash: "test",
     tools: [],
@@ -484,7 +520,6 @@ class AcknowledgementConnection implements DaemonConnection {
             agent: {
               id: event.agentId,
               workspaceId: "workspace",
-              backend: "local",
               provider: "codex",
               nativeAgentId: "native-agent",
               status: event.agent.status,

@@ -23,7 +23,6 @@ import { Steps } from "../components/app/steps.js";
 import { SegmentedControl, type SegmentedOption } from "../components/app/segmented-control.js";
 import { StatusPill, statusLabel } from "../components/app/status-pill.js";
 import { TwoLine } from "../components/app/two-line.js";
-import { Input } from "../components/ui/input.js";
 import { Button } from "../components/ui/button.js";
 import { Textarea } from "../components/ui/textarea.js";
 import { SiteHeaderActions } from "../shell/site-header-actions.js";
@@ -638,7 +637,6 @@ function TriggerForm({
     snapshot.organization.slug,
     selectedDaemon?.id,
     form.cwd,
-    form.backend ?? "local",
   );
   return (
     <div className="grid gap-6">
@@ -786,7 +784,6 @@ function TriggerForm({
                       onChange({
                         ...form,
                         daemon: option.value,
-                        backend: "local",
                         agent: "",
                         mode: "",
                         thinkingOptionId: "",
@@ -796,31 +793,6 @@ function TriggerForm({
                   />
                 )}
               </FormField>
-              {selectedDaemon === undefined ? null : (
-                <FormField
-                  id="trigger-backend"
-                  label="Execution backend"
-                  description="Backend ID configured on this Miko daemon. Use local for this machine."
-                  {...fieldError(errors, "backend")}
-                >
-                  {(control) => (
-                    <Input
-                      {...control}
-                      value={form.backend ?? "local"}
-                      onChange={(event) =>
-                        onChange({
-                          ...form,
-                          backend: event.target.value,
-                          agent: "",
-                          mode: "",
-                          thinkingOptionId: "",
-                          providerOptions: "",
-                        })
-                      }
-                    />
-                  )}
-                </FormField>
-              )}
               {selectedDaemon === undefined ? null : (
                 <div className="grid gap-4 sm:grid-cols-2">
                   <FormField
@@ -1210,7 +1182,7 @@ function ProviderCatalogFields({
       <FormField
         id="trigger-agent"
         label="Agent"
-        description="Models on this backend that declare support for unattended execution."
+        description="Models on this daemon that declare support for unattended execution."
         required
         {...fieldError(errors, "agent")}
       >
@@ -1277,18 +1249,16 @@ function useDaemonProviderCatalog(
   organizationSlug: string,
   daemonId: string | undefined,
   cwd: string,
-  backend = "local",
 ) {
   const load = useServerFn(daemonProviderSnapshot);
-  const queryKey = ["daemon-provider-snapshot", organizationSlug, daemonId, cwd, backend] as const;
-  const enabled =
-    daemonId !== undefined && cwd.trim() !== "" && /^[a-z][a-z0-9_-]*$/u.test(backend);
+  const queryKey = ["daemon-provider-snapshot", organizationSlug, daemonId, cwd] as const;
+  const enabled = daemonId !== undefined && cwd.trim() !== "";
   const query = useSnapshotQuery({
     queryKey,
     enabled,
     queryFn: () =>
       load({
-        data: { organizationSlug, daemonId: daemonId!, cwd: cwd.trim(), backend, refresh: true },
+        data: { organizationSlug, daemonId: daemonId!, cwd: cwd.trim(), refresh: true },
       }),
   });
   const entries = query.data?.entries;

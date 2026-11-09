@@ -49,9 +49,11 @@ export interface MaterializedOutputCapability {
 export const finishExecutionToolName = "finish_execution" as const;
 
 function finishExecutionToolDescription(outputSchema: JsonValue | undefined): string {
-  return outputSchema === undefined
-    ? "Completes this execution and records its optional structured output."
-    : "Completes this execution and records the configured structured output.";
+  const completion =
+    outputSchema === undefined
+      ? "Completes this execution and records its optional structured output."
+      : "Completes this execution and records the configured structured output.";
+  return `${completion} If the requested work could not be completed, pass error with the reason instead of claiming success.`;
 }
 
 export const replyOutputTool: OutputToolDefinition = {

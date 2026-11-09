@@ -4,7 +4,8 @@
 
 ### Added
 
-- Miko daemon execution backends with explicit native session bindings, durable request recovery and backend-aware provider configuration.
+- Activity details dialogs with invocation context, step outputs, and persistent, paginated agent execution logs.
+- Miko daemon execution with explicit native session bindings, durable request recovery and provider configuration.
 
 - Status filters on the Triggers table, with the selected status remembered for each organization.
 - Light and dark appearance options, with a saved browser preference and automatic system theme support.
@@ -17,12 +18,13 @@
 
 ### Changed
 
-- Hub now requires the versioned Miko execution protocol and targets its trimmed execution-only daemon distribution. Upgrade after draining active work; old daemon registrations and continuation keys are retired by the cutover migration.
+- Hub now requires Miko execution protocol 2.0.0 and runs the selected daemon's providers directly, removing backend selectors and forwarding to existing Paseo services. Upgrade after draining active work; old daemon registrations and continuation keys are retired by the cutover migration.
 
 - Unhandled provider event receipts expire automatically after seven days on every instance. Receipts routed to a trigger or still referenced by a run or attachment remain available.
 
 ### Fixed
 
+- Agents can report unsuccessful work through `finish_execution.error`; Activity shows the failure reason and the workflow does not emit a success reaction. Structured completion schemas preserve the session's required execution identity.
 - Secondary text remains readable on hovered surfaces in light appearance.
 
 ## 0.11.0 - 2026-10-25

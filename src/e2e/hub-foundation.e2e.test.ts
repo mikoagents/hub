@@ -23,23 +23,6 @@ describeHubE2E("Paseo Hub cross-repository contract", () => {
     assert.deepEqual(shutdown?.leakedProcesses ?? [], []);
   }, 120_000);
 
-  it("runs a Hub workflow on an existing native Paseo backend owned by a separate daemon", async () => {
-    await hub.stop();
-    hub = await HubE2E.start({ nativeBackend: true });
-    await hub.connect();
-    await hub.daemonIsConnected();
-    await hub.installProductionConfiguration();
-    const run = await hub.runManual("native-paseo-backend", "payments"),
-      completed = await hub.completedRun(run.executionId);
-    assert.equal(completed.status, "succeeded");
-    assert.equal(completed.output, "phase-five:requested");
-    assert.deepEqual(await hub.nativeBackendEvidence(run.executionId), {
-      backend: "existing",
-      nativeOwnerHasAgent: true,
-      localAgents: 0,
-    });
-  }, 120_000);
-
   it("continues a conversation through session tools and restores its archived workspace", async () => {
     await hub.connect();
     await hub.daemonIsConnected();
@@ -50,7 +33,6 @@ describeHubE2E("Paseo Hub cross-repository contract", () => {
     assert.equal(firstResult.duplicateRejected, true);
     await hub.sessionIsArchived(first.executionId);
     const session = await hub.sessionEvidence(first.executionId);
-    assert.equal(session.runtimeBinding.backend, "local");
     assert.notEqual(session.runtimeBinding.nativeAgentId, session.agentId);
     const second = await hub.runCapabilityTrigger("continuation-second", "one-thread");
     assert.equal(second.agentId, first.agentId);

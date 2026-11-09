@@ -2,23 +2,17 @@
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 
 const [packagesRoot, daemonHost, cwd] = process.argv.slice(2);
 if (!packagesRoot || !daemonHost || !cwd)
   throw new Error("usage: unrelated-agent <packages-root> <daemon-host> <cwd>");
 const requireFromMiko = createRequire(join(packagesRoot, "package.json"));
 const { WebSocket } = requireFromMiko("ws");
-const { PaseoBackend } = await import(
-  pathToFileURL(
-    join(packagesRoot, "node_modules/@mikoagents/server/dist/server/server/miko/paseo-backend.js"),
-  ).toString()
-);
 const socket = new WebSocket(`ws://${daemonHost}/ws`);
-const backend = new PaseoBackend((frame) => socket.send(frame));
-socket.on("message", (frame) => backend.receive(JSON.parse(frame.toString())));
-socket.on("error", () => backend.close());
-socket.on("close", () => backend.close());
+const ready = new Promise((resolve, reject) => {
+  socket.once("message", resolve);
+  socket.once("error", reject);
+});
 socket.on("open", () =>
   socket.send(
     JSON.stringify({
@@ -32,19 +26,48 @@ socket.on("open", () =>
 );
 const timeout = setTimeout(() => socket.terminate(), 15_000);
 try {
-  await backend.ready;
-  const agent = await backend.create(randomUUID(), {
-    backend: "local",
-    provider: "hub-e2e",
-    cwd,
-    title: "Unrelated local activity",
+  await ready;
+  const result = await request("create_agent_request", {
+    idempotencyKey: randomUUID(),
+    config: {
+      provider: "hub-e2e",
+      cwd,
+      title: "Unrelated local activity",
+      toolPolicy: { preapproved: [] },
+    },
     env: {},
-    toolPolicy: { preapproved: [] },
   });
-  await backend.send(agent.id, randomUUID(), "local unrelated activity");
+  const agent = result.agent;
+  if (!agent || typeof agent.id !== "string") throw new Error("Local native agent creation failed");
+  await request("send_agent_message_request", {
+    agentId: agent.id,
+    messageId: randomUUID(),
+    text: "local unrelated activity",
+  });
   process.stdout.write(`${JSON.stringify(agent.id)}\n`);
 } finally {
   clearTimeout(timeout);
-  backend.close();
   socket.close();
+}
+
+function request(type, fields) {
+  return new Promise((resolve, reject) => {
+    const requestId = randomUUID();
+    const listener = (raw) => {
+      const frame = JSON.parse(raw.toString());
+      const payload = frame.message?.payload;
+      if (payload?.requestId !== requestId) return;
+      socket.off("message", listener);
+      socket.off("close", closed);
+      if (payload.error) reject(new Error(payload.error));
+      else resolve(payload);
+    };
+    const closed = () => {
+      socket.off("message", listener);
+      reject(new Error("Local native connection closed"));
+    };
+    socket.on("message", listener);
+    socket.once("close", closed);
+    socket.send(JSON.stringify({ type: "session", message: { type, requestId, ...fields } }));
+  });
 }

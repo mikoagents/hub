@@ -25,7 +25,7 @@ Configuration validation and installation accept the same YAML, optional `projec
 
 ## Workflow MCP tools
 
-Hub sends each daemon the authored rendered prompt unchanged. Execution tools are exposed through the provider-native Hub MCP server and its exact tool policy; Hub does not prepend a tool inventory or otherwise rewrite the prompt. Completion is exposed as `finish_execution`; allowed and materialized output tools use their registered names, such as `reply`. For structured-output steps, `finish_execution` accepts the configured result under `output`. Completing an execution does not necessarily complete the whole workflow.
+Hub sends each daemon the authored rendered prompt unchanged. Execution tools are exposed through the provider-native Hub MCP server and its exact tool policy; Hub does not prepend a tool inventory or otherwise rewrite the prompt. Completion is exposed as `finish_execution`; allowed and materialized output tools use their registered names, such as `reply`. For structured-output steps, `finish_execution` accepts the configured result under `output`. If work fails, call `finish_execution` with `error` containing the failure reason and omit `output`. This records a failed execution and workflow step, without requiring successful output delivery or issuing a success reaction. Completing an execution does not necessarily complete the whole workflow.
 
 ## Trigger prompt and optional context
 

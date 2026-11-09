@@ -83,6 +83,16 @@ run:
 `;
 
 describe("self-contained trigger documents", () => {
+  it("rejects backend selection in trigger agent choices", () => {
+    assert.throws(
+      () =>
+        parseTriggerDocument(
+          trigger.replace("provider: codex", "provider: codex\n        backend: workstation"),
+        ),
+      /run.agent/,
+    );
+  });
+
   it.each([undefined, false, true])("compiles and round-trips background %s", (background) => {
     const yaml =
       background === undefined

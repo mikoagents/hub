@@ -3,6 +3,7 @@ import {
   type AnyPgColumn,
   boolean,
   bigint,
+  bigserial,
   check,
   foreignKey,
   index,
@@ -795,6 +796,19 @@ export const agentExecutions = pgTable(
       name: "agent_executions_workflow_step_run_fk",
     }),
   ],
+);
+
+export const agentExecutionLogs = pgTable(
+  "agent_execution_logs",
+  {
+    id: bigserial({ mode: "bigint" }).primaryKey(),
+    executionId: uuid("execution_id")
+      .notNull()
+      .references(() => agentExecutions.id, { onDelete: "cascade" }),
+    recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull(),
+    event: jsonb().notNull(),
+  },
+  (table) => [index("agent_execution_logs_execution_id_idx").on(table.executionId, table.id)],
 );
 
 export const users = pgTable("user", {

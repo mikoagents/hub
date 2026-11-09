@@ -20,14 +20,36 @@ export function compileJsonSchema(schema: JsonValue): CompiledJsonSchema {
 export function compileFinishExecutionArguments(
   outputSchema: JsonValue | undefined,
 ): CompiledJsonSchema {
-  return compileJsonSchema(
+  const success =
     outputSchema === undefined
       ? { type: "object", properties: {}, additionalProperties: false }
-      : finishExecutionArgumentsSchema(outputSchema),
-  );
+      : finishExecutionArgumentsSchema(outputSchema);
+  return compileJsonSchema({
+    type: "object",
+    properties: {
+      ...success.properties,
+      error: {
+        type: "string",
+        minLength: 1,
+        maxLength: 2000,
+        pattern: "\\S",
+        description:
+          "Report unsuccessful work with its reason. Omit output when reporting failure.",
+      },
+    },
+    additionalProperties: false,
+    ...(outputSchema === undefined
+      ? {}
+      : {
+          if: { type: "object", properties: { error: {} }, required: ["error"] },
+          // oxlint-disable-next-line unicorn/no-thenable -- JSON Schema conditional keyword, not a promise method
+          then: { not: { type: "object", properties: { output: {} }, required: ["output"] } },
+          else: { type: "object", properties: { output: {} }, required: ["output"] },
+        }),
+  });
 }
 
-function finishExecutionArgumentsSchema(outputSchema: JsonValue): JsonValue {
+function finishExecutionArgumentsSchema(outputSchema: JsonValue) {
   if (!isRecord(outputSchema)) throw new Error("JSON Schema must be an object");
   const embeddedOutput = { ...outputSchema };
   if (embeddedOutput["$id"] === undefined) {

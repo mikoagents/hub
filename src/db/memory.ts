@@ -174,6 +174,7 @@ class MemoryDatabase implements Database {
   private readonly providerEventReceiptIdsBySignature = new Map<string, string>();
   private readonly machines = new Map<string, MachineRecord>();
   private readonly agentExecutions = new Map<string, AgentExecutionRecord>();
+  private readonly agentExecutionLogs: import("./types.js").AgentExecutionLogRecord[] = [];
   private readonly triggerRuns = new Map<string, TriggerRunRecord>();
   private readonly triggerRunIdsByProviderEventReceipt = new Map<
     string,
@@ -1836,6 +1837,24 @@ class MemoryDatabase implements Database {
 
   async findAgentExecutionById(id: string): Promise<AgentExecutionRecord | undefined> {
     return this.agentExecutions.get(id);
+  }
+
+  async appendAgentExecutionLog(
+    input: Omit<import("./types.js").AgentExecutionLogRecord, "id">,
+  ): Promise<void> {
+    if (!this.agentExecutions.has(input.executionId)) throw new Error("execution not found");
+    this.agentExecutionLogs.push({
+      ...structuredClone(input),
+      id: String(this.agentExecutionLogs.length + 1),
+    });
+  }
+
+  async listAgentExecutionLogs(executionId: string, after: string, limit: number) {
+    return structuredClone(
+      this.agentExecutionLogs
+        .filter((entry) => entry.executionId === executionId && BigInt(entry.id) > BigInt(after))
+        .slice(0, Math.min(Math.max(limit, 1), 101)),
+    );
   }
 
   async setAgentExecutionReactionState(

@@ -36,7 +36,7 @@ export interface TriggerAgentConfig {
   provider: string;
   mode?: string | undefined;
   model?: string | undefined;
-  backend?: string | undefined;
+
   thinkingOptionId?: string | undefined;
   options?: Readonly<Record<string, JsonValue>> | undefined;
 }
@@ -46,7 +46,6 @@ export function cleanTriggerAgent(agent: TriggerAgentConfig): TriggerAgentConfig
     provider: agent.provider,
     ...(agent.mode === undefined ? {} : { mode: agent.mode }),
     ...(agent.model === undefined ? {} : { model: agent.model }),
-    ...(agent.backend === undefined ? {} : { backend: agent.backend }),
     ...(agent.thinkingOptionId === undefined ? {} : { thinkingOptionId: agent.thinkingOptionId }),
     ...(agent.options === undefined ? {} : { options: structuredClone(agent.options) }),
   };

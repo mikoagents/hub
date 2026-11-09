@@ -1,6 +1,6 @@
 # Paseo Hub
 
-Paseo Hub is the self-hosted open-source automation layer for existing Paseo (`getpaseo/paseo`) daemons.
+Paseo Hub is the self-hosted open-source automation layer for Miko (`mikoagents/miko-daemon`) execution daemons.
 
 This repository contains the open-source Hub codebase. Its Fly files contain only the minimal,
 non-secret deployment wiring. Credentials, private workflow configuration, and operational

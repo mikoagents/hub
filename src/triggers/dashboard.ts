@@ -1,6 +1,7 @@
 import type { AuthServer } from "../auth/server.js";
 import { capabilitiesFor } from "../auth/organization-policy.js";
-import type { Database, OrganizationTriggerRecord } from "../db/types.js";
+import type { Database, OrganizationTriggerRecord, ProjectActivityRunRecord } from "../db/types.js";
+import { activityRunView, displayFailureReason } from "../projects/dashboard.js";
 import { resolveRouteTenant } from "../projects/access.js";
 import { ProjectCommandError } from "../projects/command-error.js";
 import { parseCompiledHubConfig } from "../config/compiler.js";
@@ -114,8 +115,95 @@ export class TriggerDashboard {
         source: receipt.source,
         repo: receipt.repo,
         status: run.status,
+        failureReason: run.outcome === "accepted" ? displayFailureReason(run.failureReason) : null,
         receivedAt: receipt.receivedAt.toISOString(),
       }));
+  }
+
+  private async resolveActivity(
+    request: Request,
+    scope: { organizationSlug: string; triggerId: string; runId: string },
+  ): Promise<{ trigger: OrganizationTriggerRecord; activity: ProjectActivityRunRecord }> {
+    const { tenant } = await resolveRouteTenant(this.auth, this.database, request, scope);
+    const trigger = (await this.database.listOrganizationTriggers(tenant.organization.id)).find(
+      ({ id }) => id === scope.triggerId,
+    );
+    if (trigger === undefined) throw new ProjectCommandError("run_unavailable");
+    const current = await this.database.findProjectActivityRun(
+      trigger.runtimeProjectId,
+      scope.runId,
+    );
+    if (current !== undefined && current.run.organizationId === tenant.organization.id) {
+      return { trigger, activity: current };
+    }
+    const migration = await this.database.findOrganizationTriggerMigrationRevision(trigger.id);
+    const legacyProjectId = string(record(migration?.sourceEvidence)?.["legacyProjectId"]);
+    if (migration !== undefined && legacyProjectId !== undefined) {
+      const historical = await this.database.findProjectActivityRun(legacyProjectId, scope.runId);
+      const name = parseCompiledHubConfig(migration.normalizedConfiguration).triggers[0]?.name;
+      if (
+        historical !== undefined &&
+        historical.run.organizationId === tenant.organization.id &&
+        historical.run.configuredTriggerName === name
+      )
+        return { trigger, activity: historical };
+    }
+    throw new ProjectCommandError("run_unavailable");
+  }
+
+  async activityRunSnapshot(
+    request: Request,
+    scope: { organizationSlug: string; triggerId: string; runId: string },
+  ) {
+    const { trigger, activity } = await this.resolveActivity(request, scope);
+    return {
+      triggerName: trigger.name,
+      activity: activityRunView(
+        activity,
+        await Promise.all(
+          activity.steps.map(async (step) =>
+            step.agentExecutionId === null
+              ? undefined
+              : this.database.findAgentExecutionForOrganization(
+                  trigger.organizationId,
+                  step.agentExecutionId,
+                ),
+          ),
+        ),
+      ),
+    };
+  }
+
+  async activityRunLogs(
+    request: Request,
+    scope: {
+      organizationSlug: string;
+      triggerId: string;
+      runId: string;
+      executionId: string;
+      after: string;
+    },
+  ) {
+    const { activity } = await this.resolveActivity(request, scope);
+    if (!activity.steps.some((step) => step.agentExecutionId === scope.executionId)) {
+      throw new ProjectCommandError("run_unavailable");
+    }
+    const execution = await this.database.findAgentExecutionForProject(
+      activity.run.projectId,
+      scope.executionId,
+    );
+    if (execution === undefined || execution.organizationId !== activity.run.organizationId)
+      throw new ProjectCommandError("run_unavailable");
+    const entries = await this.database.listAgentExecutionLogs(scope.executionId, scope.after, 101);
+    return {
+      entries: entries.slice(0, 100).map((entry) => ({
+        id: entry.id,
+        executionId: entry.executionId,
+        event: entry.event,
+        recordedAt: entry.recordedAt.toISOString(),
+      })),
+      nextCursor: entries.length > 100 ? entries[99]!.id : null,
+    };
   }
 
   async save(

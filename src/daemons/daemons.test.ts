@@ -312,7 +312,8 @@ describe("daemon enrollment and execution", () => {
       [
         {
           name: "finish_execution",
-          description: "Completes this execution and records its optional structured output.",
+          description:
+            "Completes this execution and records its optional structured output. If the requested work could not be completed, pass error with the reason instead of claiming success.",
         },
         {
           name: "reply",
@@ -344,7 +345,8 @@ describe("daemon enrollment and execution", () => {
       [
         {
           name: "finish_execution",
-          description: "Completes this execution and records the configured structured output.",
+          description:
+            "Completes this execution and records the configured structured output. If the requested work could not be completed, pass error with the reason instead of claiming success.",
         },
       ],
     );
@@ -352,8 +354,19 @@ describe("daemon enrollment and execution", () => {
     assert.deepEqual(exposedTools[0]?.inputSchema, {
       type: "object",
       additionalProperties: false,
-      required: ["output"],
+      if: { type: "object", properties: { error: {} }, required: ["error"] },
+      // oxlint-disable-next-line unicorn/no-thenable -- JSON Schema conditional keyword, not a promise method
+      then: { not: { type: "object", properties: { output: {} }, required: ["output"] } },
+      else: { type: "object", properties: { output: {} }, required: ["output"] },
       properties: {
+        error: {
+          type: "string",
+          minLength: 1,
+          maxLength: 2000,
+          pattern: "\\S",
+          description:
+            "Report unsuccessful work with its reason. Omit output when reporting failure.",
+        },
         output: {
           $id: "urn:paseo:hub:finish-execution-output",
           type: "object",

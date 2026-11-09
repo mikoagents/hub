@@ -54,7 +54,7 @@ test("creates a trigger visually, preserves advanced YAML through the form, and 
   await test.step("the common setup stays in one small form", async () => {
     await triggers.startNew();
     await triggers.expectDaemonPreselected(daemon);
-    await expect(page.getByLabel("Execution backend", { exact: true })).toHaveValue("local");
+    await expect(page.getByLabel("Execution backend", { exact: true })).toHaveCount(0);
     await page.screenshot({ path: `${SHOTS}/01b-daemon-required.png`, fullPage: true });
     await triggers.expectRefusedOnSubmit("Working directory is required.");
     await triggers.configureSlackMention({
@@ -119,7 +119,7 @@ test("creates a trigger visually, preserves advanced YAML through the form, and 
 
   await test.step("the form projects advanced YAML without hiding or deleting it", async () => {
     await triggers.openTrigger("slack-help");
-    await expect(page.getByLabel("Execution backend", { exact: true })).toHaveValue("existing");
+    await expect(page.getByLabel("Execution backend", { exact: true })).toHaveCount(0);
     await triggers.expectFormAgent({
       agent: "opencode/gateway/vendor/model-v1",
       mode: "full-access",
@@ -136,7 +136,6 @@ test("creates a trigger visually, preserves advanced YAML through the form, and 
     await triggers.switchToYaml();
     await triggers.expectYamlContains(
       "# survives form edits",
-      "backend: existing",
       "thinkingOptionId: high",
       "newBranch: trigger-work",
       "channels:",
@@ -219,7 +218,6 @@ run:
       mode: branch-off
       newBranch: trigger-work
   agent:
-    backend: existing
     provider: opencode
     model: gateway/vendor/model-v1
     mode: full-access

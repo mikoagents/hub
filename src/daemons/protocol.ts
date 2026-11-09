@@ -7,7 +7,6 @@ import type {
 } from "../hub/protocol.js";
 
 export interface DaemonCreateAgentOptions {
-  backend?: string;
   provider: string;
   /** Explicit agent title, shown beside the workspace title in Paseo. */
   title?: string;
@@ -77,12 +76,8 @@ export type AgentValidationVerdict =
 
 export interface DaemonConnection {
   agents: import("./agents/index.js").AgentConnection;
-  getProviderSnapshot(options: { cwd?: string; backend?: string }): Promise<HubProviderSnapshot>;
-  refreshProviderSnapshot(options: {
-    cwd?: string;
-    backend?: string;
-    providers?: string[];
-  }): Promise<void>;
+  getProviderSnapshot(options: { cwd?: string }): Promise<HubProviderSnapshot>;
+  refreshProviderSnapshot(options: { cwd?: string; providers?: string[] }): Promise<void>;
   /** The daemon's own answer about whether it can run this agent as configured. */
   validateAgentConfiguration(agent: CompiledAgent): Promise<AgentValidationVerdict>;
 }

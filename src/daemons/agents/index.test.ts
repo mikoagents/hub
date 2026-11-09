@@ -7,12 +7,10 @@ const snapshot = {
   id: "session",
   workspaceId: "workspace",
   status: "idle",
-  backend: "remote",
   provider: "codex/custom",
   nativeAgentId: "native",
 };
 const options: DaemonCreateAgentOptions = {
-  backend: "remote",
   provider: "codex/custom",
   cwd: "/repo",
   env: { TASK: "explicit" },
@@ -30,7 +28,7 @@ function connect() {
   });
   return { requests, agents };
 }
-test("public creation binds backend and preserves the exact provider configuration and prompt", async () => {
+test("public creation binds provider and preserves the exact provider configuration and prompt", async () => {
   const { agents, requests } = connect();
   await agents.create("key", options);
   const text = "  author prompt\n".repeat(1000);
@@ -83,6 +81,6 @@ test("native frames and mismatched execution protocol versions are never accepte
   const { agents } = connect();
   expect(agents.receive({ type: "session", message: { type: "agent_update" } })).toBe(false);
   expect(
-    agents.receive({ type: "miko.response", version: "2.0.0", requestId: "id", result: snapshot }),
+    agents.receive({ type: "miko.response", version: "1.0.0", requestId: "id", result: snapshot }),
   ).toBe(false);
 });
