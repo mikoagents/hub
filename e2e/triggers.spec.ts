@@ -54,6 +54,7 @@ test("creates a trigger visually, preserves advanced YAML through the form, and 
   await test.step("the common setup stays in one small form", async () => {
     await triggers.startNew();
     await triggers.expectDaemonPreselected(daemon);
+    await expect(page.getByLabel("Execution backend", { exact: true })).toHaveCount(0);
     await page.screenshot({ path: `${SHOTS}/01b-daemon-required.png`, fullPage: true });
     await triggers.expectRefusedOnSubmit("Working directory is required.");
     await triggers.configureSlackMention({
@@ -105,7 +106,7 @@ test("creates a trigger visually, preserves advanced YAML through the form, and 
     await triggers.replaceYaml(
       advancedTriggerYaml(daemon).replace("provider: opencode", "provider: omp"),
     );
-    await triggers.expectRefusedOnSubmit("Provider 'omp' cannot run unattended Hub automations");
+    await triggers.expectRefusedOnSubmit("Provider 'omp' is unavailable");
     await triggers.capture(`${SHOTS}/03b-refused-mode.png`);
   });
 
@@ -118,6 +119,7 @@ test("creates a trigger visually, preserves advanced YAML through the form, and 
 
   await test.step("the form projects advanced YAML without hiding or deleting it", async () => {
     await triggers.openTrigger("slack-help");
+    await expect(page.getByLabel("Execution backend", { exact: true })).toHaveCount(0);
     await triggers.expectFormAgent({
       agent: "opencode/gateway/vendor/model-v1",
       mode: "full-access",

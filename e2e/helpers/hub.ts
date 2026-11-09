@@ -1,3 +1,9 @@
+import {
+  fixtureRequest,
+  fixtureResponse,
+  handleFixtureReceipt,
+} from "../../src/daemons/test-utils/execution-fixture.js";
+import { EXECUTION_PROTOCOL_HEADER, EXECUTION_PROTOCOL_VERSION } from "../../src/miko/protocol.js";
 import { createHash, createHmac, randomUUID } from "node:crypto";
 import {
   expect,
@@ -2474,7 +2480,7 @@ export class PaseoHub {
   }
 
   /**
-   * What `paseo hub login` leaves behind on the operator's own machine: a daemon enrolled into
+   * What `miko hub login` leaves behind on the operator's own machine: a daemon enrolled into
    * their organization and holding a live connection. The enrollment token is written straight
    * to the database because the CLI's own path through it is the Paseo repository's to prove.
    */
@@ -3833,7 +3839,7 @@ class HubUser {
     await expect(this.page.getByRole("heading", { name: "Daemons", exact: true })).toBeVisible();
     await expect(this.page.getByText("No daemons connected", { exact: true })).toBeVisible();
     await expect(
-      this.page.getByText(`paseo hub login ${this.origin}`, { exact: true }),
+      this.page.getByText(`miko hub login ${this.origin}`, { exact: true }),
     ).toBeVisible();
     await expect(this.page.getByRole("link", { name: "How to connect a daemon" })).toHaveAttribute(
       "href",
@@ -5456,7 +5462,7 @@ class ContractDaemon {
       headers: {
         authorization: `Bearer ${this.credential}`,
         "x-paseo-daemon-id": this.daemonId,
-        "x-paseo-session-protocol": "1",
+        [EXECUTION_PROTOCOL_HEADER]: EXECUTION_PROTOCOL_VERSION,
       },
     });
     socket.on("message", (data) => this.acceptExecution(data));
@@ -5510,14 +5516,14 @@ class ContractDaemon {
   }
 
   private acceptExecution(data: RawData): void {
-    const value: unknown = JSON.parse(readSocketData(data));
+    const publicValue: unknown = JSON.parse(readSocketData(data));
     if (
-      this.acceptHello(value) ||
-      this.acceptProviderRequest(value) ||
-      this.acceptAgentValidation(value)
-    ) {
+      handleFixtureReceipt(publicValue, (frame) => this.socket?.send(frame)) ||
+      this.acceptHello(publicValue)
+    )
       return;
-    }
+    const value = fixtureRequest(publicValue);
+    if (this.acceptProviderRequest(value) || this.acceptAgentValidation(value)) return;
     const envelope = ExecutionRequestSchema.safeParse(value);
     if (!envelope.success) {
       this.rejectUnknownRequest(value);
@@ -5587,24 +5593,16 @@ class ContractDaemon {
   }
 
   private sendAgentResponse(type: string, payload: Record<string, unknown>): void {
-    this.socket?.send(JSON.stringify({ type: "session", message: { type, payload } }));
+    this.socket?.send(JSON.stringify(fixtureResponse({ type, payload })));
   }
 
   private acceptHello(value: unknown): boolean {
-    const hello = z.object({ type: z.literal("hello") }).safeParse(value);
-    if (!hello.success) return false;
+    if (!z.object({ type: z.literal("miko.hello") }).safeParse(value).success) return false;
     this.socket?.send(
       JSON.stringify({
-        type: "session",
-        message: {
-          type: "status",
-          payload: {
-            status: "server_info",
-            serverId: `browser-${this.daemonId}`,
-            permissions: ["hub.execute"],
-            features: { providersSnapshot: true, hubAgentRpc: true, agentRequestReceipts: true },
-          },
-        },
+        type: "miko.ready",
+        version: EXECUTION_PROTOCOL_VERSION,
+        permissions: ["hub.execute"],
       }),
     );
     return true;
@@ -5665,20 +5663,12 @@ class ContractDaemon {
         });
       }
     }
-    this.socket?.send(
-      JSON.stringify({
-        type: "session",
-        message: {
-          type: "hub.execution.agent.validate.response",
-          payload: {
-            requestId: request.requestId,
-            valid: issues.length === 0,
-            issues,
-            error: null,
-          },
-        },
-      }),
-    );
+    this.sendAgentResponse("hub.execution.agent.validate.response", {
+      requestId: request.requestId,
+      valid: issues.length === 0,
+      issues,
+      error: null,
+    });
     return true;
   }
 
@@ -5716,18 +5706,18 @@ class ContractDaemon {
               generatedAt: new Date().toISOString(),
             },
           };
-    this.socket?.send(JSON.stringify({ type: "session", message }));
+    this.socket?.send(JSON.stringify(fixtureResponse(message)));
     return true;
   }
 }
 
-// Only providers a daemon runs unattended (`src/triggers/configuration/unattended.ts`); the
-// editor offers nothing else, and the store would refuse it.
+// The fixture declares exact MCP preapproval per provider, as the execution catalog does.
 const browserProviderSnapshot = [
   {
     provider: "opencode",
     status: "ready",
     enabled: true,
+    supportsExactMcpPreapproval: true,
     label: "OpenCode",
     models: [
       {
@@ -5755,6 +5745,7 @@ const browserProviderSnapshot = [
     provider: "codex",
     status: "ready",
     enabled: true,
+    supportsExactMcpPreapproval: true,
     label: "Codex",
     models: [
       {

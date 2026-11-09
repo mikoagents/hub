@@ -11,7 +11,7 @@ import type { AgentExecutionRecord, Database } from "../db/types.js";
 import { registerResponseLifecycle } from "../http/response-lifecycle.js";
 import { reportFailure, withReference } from "../failures/index.js";
 import { compileJsonSchema, formatJsonSchemaErrors } from "../workflows/json-schema.js";
-import { iterationFailure } from "../workflows/iterations.js";
+import { completionFailure } from "../agent-executions/completion.js";
 import {
   executionToolDefinitions,
   finishExecutionToolName,
@@ -35,6 +35,7 @@ interface ExecutionCapabilityOptions {
     executionId: string;
     token: string;
     output?: unknown;
+    error?: string;
   }): Promise<AgentExecutionRecord>;
   now?: () => Date;
 }
@@ -60,22 +61,29 @@ export function createExecutionCapabilityServer(
         { name: "paseo-hub-session", version: "1.0.0" },
         { capabilities: { tools: {} } },
       );
-      server.setRequestHandler(ListToolsRequestSchema, () => ({
-        tools: session.tools.map((tool) => ({
-          ...tool,
-          inputSchema: {
-            ...tool.inputSchema,
-            properties: {
-              ...tool.inputSchema.properties,
-              executionId: {
-                type: "string",
-                description: "Execution ID supplied with the request prompt.",
+      server.setRequestHandler(ListToolsRequestSchema, async () => {
+        const executionIds = (await options.database.listAgentSessionExecutions(session.id))
+          .filter((execution) => execution.status === "spawning" || execution.status === "running")
+          .map((execution) => execution.id);
+        return {
+          tools: session.tools.map((tool) => ({
+            ...tool,
+            inputSchema: {
+              ...tool.inputSchema,
+              properties: {
+                ...tool.inputSchema.properties,
+                executionId: {
+                  type: "string",
+                  description:
+                    "Select the active execution this tool call completes or writes output for.",
+                  enum: executionIds,
+                },
               },
+              required: [...(tool.inputSchema.required ?? []), "executionId"],
             },
-            required: [...(tool.inputSchema.required ?? []), "executionId"],
-          },
-        })),
-      }));
+          })),
+        };
+      });
       server.setRequestHandler(CallToolRequestSchema, async (call) => {
         const { executionId, ...args } = call.params.arguments ?? {};
         if (typeof executionId !== "string" || !z.uuid().safeParse(executionId).success)
@@ -196,6 +204,7 @@ function createMcpServer(
       executionId: string;
       token: string;
       output?: unknown;
+      error?: string;
     }): Promise<AgentExecutionRecord>;
     now?: () => Date;
   },
@@ -257,7 +266,9 @@ async function finishExecutionCall(
   materializedOutputs: readonly MaterializedOutputCapability[],
 ) {
   try {
-    const missingOutputs = missingRequiredOutputs(execution, materializedOutputs);
+    const error = typeof args["error"] === "string" ? args["error"] : undefined;
+    const missingOutputs =
+      error === undefined ? missingRequiredOutputs(execution, materializedOutputs) : [];
     if (missingOutputs.length > 0) {
       reportFailure(
         new Error("required execution outputs are missing"),
@@ -275,9 +286,10 @@ async function finishExecutionCall(
       executionId: execution.id,
       token,
       ...(output === undefined ? {} : { output }),
+      ...(error === undefined ? {} : { error }),
     });
     const expectedStatus =
-      iterationFailure(execution.launchIntent?.iteration, output) === undefined
+      completionFailure(execution.launchIntent?.iteration, output, error) === undefined
         ? "succeeded"
         : "failed";
     if (completed.status !== expectedStatus) {
@@ -300,9 +312,7 @@ async function finishExecutionCall(
       observedAt: options.now?.() ?? new Date(),
     });
     return toolSuccess(
-      expectedStatus === "failed"
-        ? "Execution paused for external intervention"
-        : "Execution finished",
+      expectedStatus === "failed" ? "Execution finished with failure" : "Execution finished",
     );
   } catch (error) {
     const failure = reportFailure(error, {

@@ -5,7 +5,7 @@ import { createServer } from "node:http";
 import { afterEach, beforeEach, describe, it, vi } from "vitest";
 import { WebSocket, type RawData } from "ws";
 import type { DaemonRecord } from "../db/types.js";
-import { HubDaemonHelloSchema } from "../hub/protocol.js";
+import { HelloSchema } from "../miko/protocol.js";
 import { createLogger } from "../logger.js";
 import { assertOneFailure, FailureLogStream } from "../test-utils/failure-logs.js";
 import { DaemonResponseLostError } from "./protocol.js";
@@ -19,31 +19,16 @@ function rawDataToText(data: RawData): string {
 }
 
 describe("daemon socket protocol negotiation", () => {
-  it.each([
-    {
-      offered: true,
-      expectedProtocol: "1",
-      expectsHello: true,
-      expectsReady: false,
-    },
-    {
-      offered: false,
-      expectedProtocol: undefined,
-      expectsHello: false,
-      expectsReady: true,
-    },
-  ])(
-    "negotiates the standard session only when offered=$offered",
-    async ({ offered, expectedProtocol, expectsHello, expectsReady }) => {
-      const secret = "daemon-secret";
-      const now = new Date();
+  it.each([undefined, "1.0.0", "2.0.0"])(
+    "requires the exact public protocol version %s",
+    async (offered) => {
       const daemon: DaemonRecord = {
         id: randomUUID(),
-        slug: "negotiation-daemon",
+        slug: "test",
         machineId: randomUUID(),
         serverId: randomUUID(),
-        daemonPublicKey: "public-key",
-        credentialVerifier: createHash("sha256").update(secret).digest("base64url"),
+        daemonPublicKey: "public",
+        credentialVerifier: createHash("sha256").update("secret").digest("base64url"),
         permissions: ["hub.execute"],
         registeredByApiKeyId: null,
         registeredByCliCredentialId: null,
@@ -51,56 +36,53 @@ describe("daemon socket protocol negotiation", () => {
         presence: "offline",
         connectedAt: null,
         disconnectedAt: null,
-        lastSeenAt: now,
-        createdAt: now,
+        lastSeenAt: new Date(),
+        createdAt: new Date(),
       };
       const registry = new ActiveDaemonRegistry({
-        touchDaemon: async () => undefined,
-        setDaemonPresence: async () => undefined,
+        touchDaemon: async () => {},
+        setDaemonPresence: async () => {},
       });
-      const server = createServer();
-      const handleUpgrade = createDaemonUpgradeHandler(
-        { findDaemonById: async () => daemon },
-        registry,
-      );
+      const server = createServer(),
+        upgrade = createDaemonUpgradeHandler({ findDaemonById: async () => daemon }, registry);
       server.on("upgrade", (request, socket, head) => {
-        void handleUpgrade(request, socket, head);
+        void upgrade(request, socket, head);
       });
       await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
       const address = server.address();
       assert(address && typeof address !== "string");
-      const messages: string[] = [];
-      let negotiatedProtocol: string | string[] | undefined;
-      const client = new WebSocket(`ws://127.0.0.1:${address.port}/api/daemons/socket`, {
+      const socket = new WebSocket(`ws://127.0.0.1:${address.port}/api/daemons/socket`, {
         headers: {
-          authorization: `Bearer ${secret}`,
+          authorization: "Bearer secret",
           "x-paseo-daemon-id": daemon.id,
-          ...(offered ? { "x-paseo-session-protocol": "1" } : {}),
+          ...(offered ? { "x-miko-execution-protocol": offered } : {}),
         },
       });
-      client.on("upgrade", (response) => {
-        negotiatedProtocol = response.headers["x-paseo-session-protocol"];
-      });
-      client.on("message", (data: RawData) => {
-        messages.push(rawDataToText(data));
-      });
-      await new Promise<void>((resolve, reject) => {
-        client.once("open", resolve);
-        client.once("error", reject);
-      });
-      await new Promise<void>((resolve) => setImmediate(resolve));
-
-      assert.equal(negotiatedProtocol, expectedProtocol);
-      assert.equal(
-        messages.some((message) => HubDaemonHelloSchema.safeParse(JSON.parse(message)).success),
-        expectsHello,
-      );
-      assert.equal(registry.connection(daemon.id) !== undefined, expectsReady);
-
-      client.close();
-      await new Promise<void>((resolve) => client.once("close", () => resolve()));
-      await registry.stop();
-      await new Promise<void>((resolve) => server.close(() => resolve()));
+      socket.on("error", () => {});
+      try {
+        if (offered === "2.0.0") {
+          const hello = await new Promise<unknown>((resolve, reject) => {
+            socket.once("message", (data) => resolve(JSON.parse(rawDataToText(data))));
+            socket.once("error", reject);
+          });
+          assert(HelloSchema.safeParse(hello).success);
+        } else {
+          const status = await new Promise<number | undefined>((resolve) =>
+            socket.once("unexpected-response", (_request, response) => {
+              const code = response.statusCode;
+              response.destroy();
+              socket.terminate();
+              resolve(code);
+            }),
+          );
+          assert.equal(status, 403);
+        }
+      } finally {
+        socket.on("error", () => {});
+        socket.close();
+        await registry.stop();
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+      }
     },
   );
 });
@@ -121,12 +103,6 @@ describe("daemon socket generations", () => {
 
     await daemon.waitUntilCurrentClosed();
     assert.equal(daemon.connected(), false);
-  });
-
-  it("keeps a legacy daemon connected without sending the standard hello", async () => {
-    await daemon.replaceConnection(false, "legacy");
-
-    assert.equal(daemon.connected(), true);
   });
 
   let daemon: DaemonRegistryHarness;
@@ -153,6 +129,8 @@ describe("daemon socket generations", () => {
     });
     assert.deepEqual(await daemon.completeCreate("new-create", "agent-new"), {
       id: "agent-new",
+      provider: "codex",
+      nativeAgentId: "agent-new",
       workspaceId: "workspace-agent-new",
       status: "idle",
     });

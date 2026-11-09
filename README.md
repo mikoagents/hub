@@ -4,7 +4,7 @@
 
 <h1 align="center">Paseo Hub</h1>
 
-<p align="center">Run coding agents from GitHub, Linear, Slack, and Discord on your own Paseo daemons.</p>
+<p align="center">Run coding agents from GitHub, Linear, Slack, and Discord on your own Miko daemons.</p>
 
 <p align="center">
   <a href="https://paseo.sh/docs/hub">Docs</a> ·
@@ -15,9 +15,9 @@
 > [!WARNING]
 > Paseo Hub is in early development. Expect breaking changes and data loss. [Join the Paseo Discord](https://discord.gg/jz8T2uahpH) to learn more about the project.
 
-Paseo Hub is the self-hosted automation layer for [Paseo](https://paseo.sh). Connect the services where work arrives and run agents on the machines where your development environments already live.
+Paseo Hub is the self-hosted automation layer for [Miko execution daemons](https://github.com/mikoagents/miko-daemon). Connect the services where work arrives and run agents on the machines where your development environments already live.
 
-- **Your machines:** Hub dispatches to Paseo daemons on your laptop, devbox, or build server.
+- **Your machines:** Hub dispatches to Miko daemons on your laptop, devbox, or build server, using each daemon's configured providers.
 - **Your configuration:** Keep triggers, environments, permissions, and prompts in version control.
 - **Your services:** Start agents from GitHub, Linear, Slack, Discord, or manual runs.
 - **One audit trail:** See every event, configuration revision, execution, and result.
@@ -31,10 +31,12 @@ Paseo Hub is the self-hosted automation layer for [Paseo](https://paseo.sh). Con
 
 ## Quick start
 
-You need Node.js and [Paseo installed and running](https://paseo.sh/docs).
+You need Node.js 22 or newer and [Miko daemon installed and running](https://github.com/mikoagents/miko-daemon). Build this fork from source:
 
 ```sh
-npx @getpaseo/hub
+npm ci
+npm run build
+node dist/index.js
 ```
 
 Open the local URL printed by Hub. Create the operator account, then follow the browser setup to connect GitHub, Slack, or Discord. Slack Socket Mode works without a public URL.
@@ -42,7 +44,7 @@ Open the local URL printed by Hub. Create the operator account, then follow the 
 From the repository where agents should work, run:
 
 ```sh
-paseo hub init
+miko hub init
 ```
 
 Choose the local Hub URL when prompted. The guided setup connects your daemon, uses the default project created during onboarding, detects the selected app connection, writes a safe starter workflow, validates it, and offers to deploy it.
@@ -71,7 +73,7 @@ Embedded mode supports one Hub process per data directory. Docker Compose contin
 You need Docker, Docker Compose, and a public HTTPS URL when connecting external providers.
 
 ```sh
-git clone https://github.com/getpaseo/hub.git
+git clone https://github.com/mikoagents/hub.git
 cd hub
 cp .env.example .env
 ```
@@ -98,16 +100,16 @@ configuration, managers retain the existing copy-and-share invitation workflow.
 Then start Hub and PostgreSQL:
 
 ```sh
-docker compose up -d
+docker compose up --build -d
 ```
 
 Open `PASEO_HUB_APP_URL`, sign in with the bootstrap account, and replace its temporary password. Connect a daemon with:
 
 ```sh
-paseo hub connect https://hub.example.com
+miko hub connect https://hub.example.com
 ```
 
-The image is published as `ghcr.io/getpaseo/hub:latest`.
+Compose builds the fork image from this checkout. The accepted daemon commit and execution schema are pinned in `miko-compatibility.json`.
 
 See the [self-hosting guide](https://paseo.sh/docs/hub/self-hosting) for production deployment details.
 For Linear setup and workflows, see the public [Linear app](https://paseo.sh/docs/hub/self-hosting/linear-app) and [Linear triggers](https://paseo.sh/docs/hub/triggers/linear) guides.
@@ -150,3 +152,5 @@ Each Hub serves a self-hosted API reference at `/api/reference` and its generate
 ## License
 
 Apache-2.0
+
+The fork uses the [Miko execution boundary](docs/miko-execution.md) and an independently maintained [Miko daemon](https://github.com/mikoagents/miko-daemon).

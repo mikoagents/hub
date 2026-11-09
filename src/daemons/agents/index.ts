@@ -1,266 +1,208 @@
-import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import {
-  HubExecutionAgentStreamEventSchema,
-  HubExecutionAgentSnapshotSchema,
-} from "../../hub/protocol.js";
-import type { DaemonCreateAgentOptions, DaemonAgentStreamEvent } from "../protocol.js";
+  EXECUTION_PROTOCOL_VERSION as version,
+  RequestSchema,
+  ResponseSchema,
+  EventSchema,
+  AgentSnapshotSchema,
+  ProviderSnapshotSchema,
+  ValidationResultSchema,
+  type ExecutionRequest,
+  type AgentEvent,
+} from "../../miko/protocol.js";
+import type { DaemonCreateAgentOptions } from "../protocol.js";
 import { DaemonResponseLostError } from "../protocol.js";
-
-const SnapshotSchema = z.object({
-  id: z.string(),
-  workspaceId: z.string(),
-  status: HubExecutionAgentSnapshotSchema.shape.status,
-  archivedAt: z.unknown().optional(),
-});
-export type AgentSnapshot = z.infer<typeof SnapshotSchema>;
-export type AgentEvent =
-  | { type: "agent_update" | "agent_snapshot"; agent: AgentSnapshot; timestamp: string }
-  | { type: "agent_stream"; agentId: string; event: DaemonAgentStreamEvent; timestamp: string };
+export type { AgentSnapshot, AgentEvent } from "../../miko/protocol.js";
 export interface AgentConnection {
   create(
     key: string,
     options: DaemonCreateAgentOptions,
     timeoutMs?: number,
-  ): Promise<AgentSnapshot>;
-  get(agentId: string): Promise<AgentSnapshot>;
+  ): Promise<import("../../miko/protocol.js").AgentSnapshot>;
+  get(agentId: string): Promise<import("../../miko/protocol.js").AgentSnapshot>;
   send(agentId: string, messageId: string, text: string, timeoutMs?: number): Promise<void>;
-  restore(workspaceId: string, timeoutMs?: number): Promise<boolean>;
-  control(agentId: string, workspaceId: string, action: "interrupt" | "archive"): Promise<void>;
+  restore(workspaceId: string, timeoutMs?: number, key?: string): Promise<boolean>;
+  control(
+    agentId: string,
+    workspaceId: string,
+    action: "interrupt" | "archive",
+    key?: string,
+  ): Promise<void>;
   watch(agentId: string, listener: (event: AgentEvent) => void): Promise<() => void>;
 }
-
-const EnvelopeSchema = z.object({
-  type: z.literal("session"),
-  message: z.object({
-    type: z.string(),
-    payload: z.record(z.string(), z.unknown()),
-  }),
-});
-const ResultSchema = z
-  .object({ error: z.string().nullable().optional(), accepted: z.boolean().optional() })
-  .passthrough();
-
 export class DaemonAgentError extends Error {}
-
-/** The ordinary daemon protocol. This channel knows nothing about Hub executions or triggers. */
+/** Hub speaks only the public execution protocol. Native RPC translation lives in Miko. */
 export class DaemonAgents implements AgentConnection {
-  private supported = false;
   private readonly pending = new Map<
     string,
-    { resolve: (value: Record<string, unknown>) => void; reject: (error: Error) => void }
+    { resolve: (result: unknown) => void; reject: (error: Error) => void }
   >();
   private readonly listeners = new Map<string, Set<(event: AgentEvent) => void>>();
-  private observing = false;
+  private readonly workspaces = new Map<string, string>();
+  private closed = false;
   constructor(
     private readonly sendFrame: (frame: string) => void,
     private readonly now: () => Date = () => new Date(),
     private readonly reportFailure: (error: unknown, operation: string) => void = () => {},
   ) {}
-
   receive(value: unknown): boolean {
-    const envelope = EnvelopeSchema.safeParse(value);
-    if (!envelope.success) return false;
-    const { type, payload } = envelope.data.message;
-    if (type === "server_info" || (type === "status" && payload["status"] === "server_info")) {
-      const features = z
-        .object({ hubAgentRpc: z.literal(true), agentRequestReceipts: z.literal(true) })
-        .safeParse(payload["features"]);
-      this.supported = features.success;
-      return false;
-    }
-    const requestId = payload["requestId"];
-    const pending = typeof requestId === "string" ? this.pending.get(requestId) : undefined;
-    if (pending) {
-      if (type === "rpc_error" || payload["status"] === "agent_create_failed") {
+    const response = ResponseSchema.safeParse(value);
+    if (response.success) {
+      const pending = this.pending.get(response.data.requestId);
+      if (!pending) return true;
+      if (response.data.error)
         pending.reject(
-          new DaemonAgentError(z.string().catch("Daemon request rejected").parse(payload["error"])),
+          response.data.error.code === "request_outcome_unknown"
+            ? new DaemonResponseLostError()
+            : new DaemonAgentError(response.data.error.code),
         );
-      } else pending.resolve(payload);
+      else pending.resolve(response.data.result);
       return true;
     }
-    if (type === "agent_update" && payload["kind"] === "upsert") {
-      const agent = SnapshotSchema.safeParse(payload["agent"]);
-      if (agent.success)
-        this.emit(agent.data.id, { type, agent: agent.data, timestamp: this.now().toISOString() });
-      return true;
-    }
-    if (type === "agent_stream") {
-      const stream = z
-        .object({
-          agentId: z.string(),
-          timestamp: z.string(),
-          event: HubExecutionAgentStreamEventSchema,
-        })
-        .safeParse(payload);
-      if (stream.success)
-        this.emit(stream.data.agentId, {
-          type,
-          ...stream.data,
-          timestamp: this.now().toISOString(),
-        });
-      return true;
-    }
-    return false;
+    const event = EventSchema.safeParse(value);
+    if (!event.success) return false;
+    const data = event.data.event,
+      agentId = data.type === "agent_stream" ? data.agentId : data.agent.id;
+    for (const listener of this.listeners.get(agentId) ?? [])
+      listener({ ...data, timestamp: this.now().toISOString() });
+    return true;
   }
-
   close(): void {
+    this.closed = true;
     for (const pending of this.pending.values()) pending.reject(new DaemonResponseLostError());
     this.pending.clear();
     this.listeners.clear();
   }
-
-  async create(
-    key: string,
-    options: DaemonCreateAgentOptions,
-    timeoutMs?: number,
-  ): Promise<AgentSnapshot> {
-    const response = await this.request(
-      {
-        type: "create_agent_request",
-        idempotencyKey: key,
-        config: {
-          provider: options.provider,
-          title: options.title,
-          cwd: options.cwd,
-          model: options.model,
-          modeId: options.mode,
-          thinkingOptionId: options.thinkingOptionId,
-          providerOptions: options.providerOptions,
-          mcpServers: options.mcpServers,
-          toolPolicy: options.toolPolicy,
-        },
-        env: options.env,
-        worktree: options.worktree,
-        background: options.background,
-      },
-      timeoutMs,
+  async create(key: string, options: DaemonCreateAgentOptions, timeoutMs?: number) {
+    const agent = AgentSnapshotSchema.parse(
+      await this.durable("create", { key, options }, `create:${key}`, timeoutMs),
     );
-    const agent = SnapshotSchema.parse(response["agent"]);
-    if (options.workspaceTitle !== undefined)
-      await this.titleWorkspace(agent.workspaceId, options.workspaceTitle);
+    this.workspaces.set(agent.workspaceId, agent.id);
     return agent;
   }
-  /**
-   * The daemon takes no workspace title on create and never auto-names a workspace whose agent
-   * starts without a prompt, so the workspace is titled after the agent exists. The agent is
-   * already created and titled, so a failure here is reported and the dispatch continues.
-   */
-  private async titleWorkspace(workspaceId: string, title: string): Promise<void> {
-    try {
-      await this.request({ type: "workspace.title.set.request", workspaceId, title });
-    } catch (error) {
-      this.reportFailure(error, "daemon.workspace.title.set");
-    }
-  }
-  async get(agentId: string): Promise<AgentSnapshot> {
-    const response = await this.request({ type: "fetch_agent_request", agentId });
-    if (response["agent"] === null)
-      throw new DaemonAgentError(
-        "Continuation agent was deleted; use a new key or choose a new agent",
-      );
-    return SnapshotSchema.parse(response["agent"]);
+  async get(agentId: string) {
+    const agent = AgentSnapshotSchema.parse(await this.request("get", { agentId }));
+    this.workspaces.set(agent.workspaceId, agent.id);
+    return agent;
   }
   async send(agentId: string, messageId: string, text: string, timeoutMs?: number): Promise<void> {
-    await this.request(
-      {
-        type: "send_agent_message_request",
-        agentId,
-        messageId,
-        text,
-        activeTurnBehavior: "steer",
-      },
+    await this.durable(
+      "submit",
+      { agentId, messageId, text },
+      `submit:${agentId}:${messageId}`,
       timeoutMs,
     );
   }
-  async restore(workspaceId: string, timeoutMs?: number): Promise<boolean> {
-    const result = await this.request({ type: "workspace.recovery.inspect.request", workspaceId });
-    const state = z
-      .object({ kind: z.string(), reason: z.string().optional() })
-      .parse(result["state"]);
-    if (state.kind === "unavailable" && state.reason === "workspace_not_archived") return false;
-    if (state.kind !== "recoverable")
-      throw new DaemonAgentError(
-        "Workspace cannot be restored; inspect its recovery state in Paseo",
-      );
-    await this.request({ type: "workspace.recovery.restore.request", workspaceId }, timeoutMs);
-    return true;
+  async restore(workspaceId: string, timeoutMs?: number, key?: string): Promise<boolean> {
+    const agentId = this.workspaces.get(workspaceId);
+    if (!agentId) throw new DaemonAgentError("session_binding_missing");
+    const result = await this.request(
+      "restore",
+      { agentId, workspaceId, key: key ?? randomUUID() },
+      timeoutMs,
+    );
+    if (typeof result !== "boolean") throw new DaemonAgentError("invalid_restore_result");
+    return result;
   }
   async control(
     agentId: string,
     workspaceId: string,
     action: "interrupt" | "archive",
+    key?: string,
   ): Promise<void> {
-    await this.request(
-      action === "archive"
-        ? { type: "archive_workspace_request", workspaceId }
-        : { type: "cancel_agent_request", agentId },
-    );
+    await this.request(action === "interrupt" ? "cancel" : "cleanup", {
+      agentId,
+      workspaceId,
+      key: key ?? randomUUID(),
+    });
   }
   async watch(agentId: string, listener: (event: AgentEvent) => void): Promise<() => void> {
     const listeners = this.listeners.get(agentId) ?? new Set();
     listeners.add(listener);
     this.listeners.set(agentId, listeners);
     try {
-      if (!this.observing) {
-        await this.request({
-          type: "fetch_agents_request",
-          includeBackground: true,
-          subscribe: { subscriptionId: "hub-continuation" },
-        });
-        this.observing = true;
-      }
-      await this.request({
-        type: "agent.timeline.set_subscription.request",
-        agentIds: [...this.listeners.keys()],
-      });
-      // Subscribe before reading so a state change after the snapshot is still observed.
-      // Fetch individually: the directory is paginated and later watches share its subscription.
-      try {
-        const response = await this.request({ type: "fetch_agent_request", agentId });
-        const agent = SnapshotSchema.safeParse(response["agent"]);
-        if (agent.success && agent.data.id === agentId)
-          listener({
-            type: "agent_snapshot",
-            agent: agent.data,
-            timestamp: this.now().toISOString(),
-          });
-      } catch (error) {
-        // Snapshot reads are best effort; older daemons keep their live subscription usable.
-        this.reportFailure(error, "daemon.agent.watch.snapshot");
-      }
+      await this.request("watch", { agentId });
     } catch (error) {
       listeners.delete(listener);
+      if (listeners.size === 0) this.listeners.delete(agentId);
       throw error;
     }
     return () => {
       listeners.delete(listener);
-      if (listeners.size === 0) this.listeners.delete(agentId);
+      if (listeners.size === 0) {
+        this.listeners.delete(agentId);
+        if (!this.closed)
+          void this.request("unwatch", { agentId }).catch((error) => {
+            if (!(error instanceof DaemonResponseLostError))
+              this.reportFailure(error, "miko.unwatch");
+          });
+      }
     };
   }
-  private emit(agentId: string, event: AgentEvent): void {
-    for (const listener of this.listeners.get(agentId) ?? []) listener(event);
+  async providers(options: { cwd?: string }) {
+    return ProviderSnapshotSchema.parse(await this.request("providers", options));
   }
-  private async request(
-    message: Record<string, unknown>,
-    timeoutMs = 30_000,
-  ): Promise<Record<string, unknown>> {
-    if (!this.supported) throw new DaemonAgentError("Update the Paseo daemon to run Hub agents");
-    const requestId = randomUUID();
-    let timeout: ReturnType<typeof setTimeout> | undefined;
+  async refresh(options: { cwd?: string; providers?: string[] }): Promise<void> {
+    await this.request("refresh", options);
+  }
+  async validate(agent: import("../../config/compiler.js").CompiledAgent) {
+    const { options, ...rest } = agent;
+    return ValidationResultSchema.parse(
+      await this.request("validate", { ...rest, providerOptions: options }),
+    );
+  }
+  private async durable(
+    operation: "create" | "submit",
+    input: Record<string, unknown>,
+    key: string,
+    timeoutMs?: number,
+  ): Promise<unknown> {
+    const receipt = await this.request("receipt", { key });
+    const parsed = importReceipt(receipt);
+    if (parsed?.state === "completed") {
+      // Send again with the same semantic key so Miko validates its fingerprint before replay.
+      return this.request(operation, input, timeoutMs);
+    }
+    if (parsed?.state === "pending" && operation === "submit") throw new DaemonResponseLostError();
     try {
-      const result = await new Promise<Record<string, unknown>>((resolve, reject) => {
+      return await this.request(operation, input, timeoutMs);
+    } catch (error) {
+      if (!(error instanceof DaemonResponseLostError)) throw error;
+      // A lost transport is recoverable only by consulting the original durable receipt.
+      const recovered = importReceipt(await this.request("receipt", { key }));
+      if (recovered?.state === "completed") return recovered.result;
+      throw error;
+    }
+  }
+  async request(
+    operation: ExecutionRequest["operation"],
+    input: Record<string, unknown>,
+    timeoutMs = 30_000,
+  ): Promise<unknown> {
+    if (this.closed) throw new DaemonResponseLostError();
+    const requestId = randomUUID();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await new Promise<unknown>((resolve, reject) => {
         this.pending.set(requestId, { resolve, reject });
-        timeout = setTimeout(() => reject(new DaemonResponseLostError()), timeoutMs);
-        this.sendFrame(JSON.stringify({ type: "session", message: { ...message, requestId } }));
+        timer = setTimeout(() => reject(new DaemonResponseLostError()), timeoutMs);
+        this.sendFrame(
+          JSON.stringify(
+            RequestSchema.parse({ type: "miko.request", version, requestId, operation, input }),
+          ),
+        );
       });
-      const parsed = ResultSchema.parse(result);
-      if (parsed.error || parsed.accepted === false)
-        throw new DaemonAgentError(parsed.error ?? "Daemon request rejected");
-      return result;
     } finally {
-      clearTimeout(timeout);
+      clearTimeout(timer);
       this.pending.delete(requestId);
     }
   }
+}
+
+function importReceipt(value: unknown) {
+  return z
+    .object({ state: z.enum(["pending", "completed"]), result: z.unknown().optional() })
+    .nullable()
+    .parse(value);
 }

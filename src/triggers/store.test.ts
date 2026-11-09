@@ -96,26 +96,31 @@ describe("organization trigger store", () => {
     );
   });
 
-  /**
-   * `Provider 'omp' cannot preapprove exact MCP tools for unattended execution` is what the
-   * daemon says when Hub sends its tool policy to a provider that cannot honour one. Hub sends
-   * that policy with every run, so the provider is refused at save.
-   */
-  it("rejects a provider that cannot run unattended, without asking the daemon", async () => {
+  it("uses the daemon's declared capability instead of a Hub provider allowlist", async () => {
     const database = await enrolledDatabase();
-    const store = new OrganizationTriggerStore(
-      database,
-      "org",
-      catalogAgentValidator({ omp: { modes: ["full-access"] } }),
-    );
-
+    let calls = 0;
+    const store = new OrganizationTriggerStore(database, "org", {
+      validateAgentConfiguration: async () => {
+        calls++;
+        return {
+          valid: false,
+          issues: [{ path: ["provider"], message: "exact MCP preapproval unsupported" }],
+        };
+      },
+    });
     await assert.rejects(
       store.save({
-        yaml: triggerYaml(true).replace("provider: codex", "provider: omp"),
+        yaml: triggerYaml(true).replace("provider: codex", "provider: custom-profile"),
         userId: null,
       }),
-      /run\.agent\.provider: Provider 'omp' cannot run unattended Hub automations; select Claude, Codex, or OpenCode/u,
+      /exact MCP preapproval unsupported/,
     );
+    assert.equal(calls, 1);
+    const supported = new OrganizationTriggerStore(database, "org", acceptingAgentValidator());
+    await supported.save({
+      yaml: triggerYaml(true).replace("provider: codex", "provider: custom-profile"),
+      userId: null,
+    });
   });
 
   it("refuses a new trigger while the target daemon cannot be asked", async () => {

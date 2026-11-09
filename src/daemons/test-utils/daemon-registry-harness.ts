@@ -1,3 +1,4 @@
+import { fixtureRequest, fixtureResponse, handleFixtureReceipt } from "./execution-fixture.js";
 import { randomUUID } from "node:crypto";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
 import { z } from "zod";
@@ -198,10 +199,7 @@ export class DaemonRegistryHarness {
     return settled;
   }
 
-  async replaceConnection(
-    completeHello = true,
-    sessionProtocol: "legacy" | "session-v1" = "session-v1",
-  ): Promise<{ supersededClosed: boolean }> {
+  async replaceConnection(completeHello = true): Promise<{ supersededClosed: boolean }> {
     const superseded = this.socket;
     const address = this.server.address();
     if (typeof address === "string" || address === null) throw new Error("Registry has no address");
@@ -225,7 +223,7 @@ export class DaemonRegistryHarness {
       });
       unsubscribeReady = this.registry.onConnected(() => resolveReady());
     }
-    this.registry.accept(this.daemon, serverSocket, sessionProtocol);
+    this.registry.accept(this.daemon, serverSocket);
     if (ready) await ready;
     unsubscribeReady();
     this.clients.push(client);
@@ -407,11 +405,12 @@ class RegistrySocket {
     });
     socket.on("message", (data) => {
       const value = JSON.parse(readText(data)) as unknown;
+      if (handleFixtureReceipt(value, (frame) => this.socket.send(frame))) return;
       if (isHubHello(value)) {
         if (this.helloPermissions) this.sendServerInfo(this.helloPermissions);
         return;
       }
-      this.messages.push(SessionRequestSchema.parse(value).message);
+      this.messages.push(SessionRequestSchema.parse(fixtureRequest(value)).message);
       this.waiter?.();
       this.waiter = undefined;
     });
@@ -432,7 +431,7 @@ class RegistrySocket {
   }
 
   send(message: unknown): void {
-    this.socket.send(JSON.stringify({ type: "session", message }));
+    this.socket.send(JSON.stringify(fixtureResponse(message)));
   }
 
   sendServerInfo(permissions: readonly string[]): void {
@@ -483,7 +482,9 @@ class RegistrySocket {
 }
 
 function isHubHello(value: unknown): boolean {
-  return typeof value === "object" && value !== null && "type" in value && value.type === "hello";
+  return (
+    typeof value === "object" && value !== null && "type" in value && value.type === "miko.hello"
+  );
 }
 
 function sameStringSet(left: readonly string[], right: readonly string[]): boolean {

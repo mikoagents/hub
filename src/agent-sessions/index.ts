@@ -80,7 +80,12 @@ export class AgentSessions {
         input.intent.outputSchema,
         this.outputs.materialize(input.intent.allowOutputs, input.intent.outputContext),
       );
-      const compatibility = fingerprint({ settings: policy?.compatibility, tools });
+      const compatibility = fingerprint({
+        settings: policy?.compatibility,
+        tools,
+        daemonId: input.intent.environment.daemonId,
+        provider: input.intent.agent.provider,
+      });
       let session = await findSession();
       if (session && (await isFinishedCredentialedSession(session))) {
         // Completion may have raced credential preparation. Retry outside the lock.
@@ -105,6 +110,7 @@ export class AgentSessions {
           daemonId: input.intent.environment.daemonId,
           agentId: null,
           workspaceId: null,
+          runtimeBinding: null,
           compatibility,
           tools,
           capabilityTokenHash: hashAgentExecutionCompletionToken(token),
@@ -139,7 +145,15 @@ export class AgentSessions {
       let action: "created" | "continued" | "restored" = "continued";
       if (session.agentId === null) {
         const agent = await input.connection.create(id, session.creationOptions, startupTimeoutMs);
-        session = { ...session, agentId: agent.id, workspaceId: agent.workspaceId };
+        session = {
+          ...session,
+          agentId: agent.id,
+          workspaceId: agent.workspaceId,
+          runtimeBinding: {
+            provider: agent.provider,
+            nativeAgentId: agent.nativeAgentId,
+          },
+        };
         await this.database.saveAgentSession(session);
         action = "created";
       }
@@ -151,11 +165,12 @@ export class AgentSessions {
         session.agentId,
       );
       const agent = await input.connection.get(session.agentId);
+      assertRuntimeBinding(session, agent);
       if (!agent.archivedAt && (agent.status === "closed" || agent.status === "error")) {
         throw new AgentSessionError("agent_interrupted");
       }
       if (agent.archivedAt) {
-        await input.connection.restore(session.workspaceId, startupTimeoutMs);
+        await input.connection.restore(session.workspaceId, startupTimeoutMs, input.executionId);
         action = "restored";
       }
       await this.database.attachExecutionToSession(input.executionId, id, action);
@@ -185,9 +200,7 @@ export class AgentSessions {
       await input.connection.send(
         agentId,
         input.executionId,
-        input.intent.continuation === undefined
-          ? input.intent.prompt
-          : `Hub execution: ${input.executionId}\nUse this executionId for Hub tool calls for this request.\n\n${input.intent.prompt}`,
+        input.intent.prompt,
         startupTimeoutMs,
       );
       return unsubscribe;
@@ -212,7 +225,7 @@ export class AgentSessions {
       // A completed arrival cannot stop work belonging to a newer arrival.
       if (executions.some((item) => item.status === "spawning" || item.status === "running"))
         return true;
-      await connection.control(agentId, workspaceId, action);
+      await connection.control(agentId, workspaceId, action, execution.id);
       return true;
     });
   }
@@ -281,4 +294,17 @@ function hasTemporaryCredentials(intent: LaunchMachineIntent): boolean {
 }
 function sessionLock(session: AgentSessionRecord): string {
   return `agent-session:${session.continuationKey === null ? session.id : deriveSessionId(session.projectId, session.continuationKey)}`;
+}
+
+function assertRuntimeBinding(
+  session: AgentSessionRecord,
+  agent: import("../daemons/agents/index.js").AgentSnapshot,
+): void {
+  const binding = session.runtimeBinding;
+  if (
+    !binding ||
+    binding.provider !== agent.provider ||
+    binding.nativeAgentId !== agent.nativeAgentId
+  )
+    throw new AgentSessionError("session_binding_mismatch");
 }

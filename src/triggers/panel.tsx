@@ -45,7 +45,6 @@ import type { HubProviderSnapshotEntry } from "../hub/protocol.js";
 import { EventFields } from "./event-fields.js";
 import { EDITOR_EVENTS, eventDefinition, parseEditorEvent } from "./configuration/events.js";
 import { selectedProviderModel } from "./provider-catalog.js";
-import { supportsUnattendedRuns } from "./configuration/unattended.js";
 import { useTriggerStatusFilter } from "./status-filter.js";
 
 type BrowserTrigger = TriggerSnapshot["triggers"][number];
@@ -1159,7 +1158,7 @@ function ProviderCatalogFields({
   // A provider the daemon cannot run unattended is not offered: Hub sends a tool policy with every
   // run, and the daemon refuses the policy at launch for any provider outside that set.
   const agentOptions = (entries ?? []).flatMap((entry) =>
-    entry.status !== "ready" || !entry.enabled || !supportsUnattendedRuns(entry.provider)
+    entry.status !== "ready" || !entry.enabled || entry.supportsExactMcpPreapproval !== true
       ? []
       : (entry.models ?? [])
           .filter((model) => model.isSelectable !== false)
@@ -1183,7 +1182,7 @@ function ProviderCatalogFields({
       <FormField
         id="trigger-agent"
         label="Agent"
-        description="Models the selected daemon can run unattended: Claude, Codex, or OpenCode."
+        description="Models on this daemon that declare support for unattended execution."
         required
         {...fieldError(errors, "agent")}
       >

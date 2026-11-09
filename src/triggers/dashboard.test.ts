@@ -6,6 +6,8 @@ import { acceptingAgentValidator } from "../test-utils/agent-validator.js";
 import { enrollTestDaemon, TEST_DAEMON_SLUG } from "../test-utils/project-configuration.js";
 import { TriggerDashboard } from "./dashboard.js";
 import { OrganizationTriggerStore } from "./store.js";
+import { compileHubBundle } from "../config/bundle.js";
+import { migrateLegacyProjectTriggers } from "./migration.js";
 
 describe("trigger dashboard read model", () => {
   it("describes the provider and latest run on the organization trigger list", async () => {
@@ -51,7 +53,7 @@ describe("trigger dashboard read model", () => {
     });
     assert.equal(receipt.status, "accepted");
     if (receipt.status !== "accepted") return;
-    await database.createAcceptedTriggerRun({
+    const created = await database.createAcceptedTriggerRun({
       organizationId: "org-1",
       projectId: trigger.runtimeProjectId,
       configurationRevisionId: revision.id,
@@ -59,7 +61,7 @@ describe("trigger dashboard read model", () => {
       configuredTriggerName: "manual-task",
       prompt: "run it",
       inputs: {},
-      triggerContext: {},
+      triggerContext: { request: "Full invocation context" },
       outputContext: {},
       deadlineAt: new Date("2026-08-30T10:30:00.000Z"),
       stepIds: ["run"],
@@ -70,6 +72,161 @@ describe("trigger dashboard read model", () => {
       status: "running",
       receivedAt: receivedAt.toISOString(),
     });
+
+    const scope = { organizationSlug: "acme", triggerId: trigger.id, runId: created.run.id };
+    const detail = await dashboard.activityRunSnapshot(request, scope);
+    assert.equal(detail.activity.prompt, "run it");
+    assert.deepEqual(detail.activity.triggerContext, { request: "Full invocation context" });
+    assert.equal("triggerContext" in after.activity[0]!, false);
+    const step = (await database.listWorkflowStepRunsForTriggerRun(created.run.id))[0]!;
+    const execution = await database.insertAgentExecution({
+      organizationId: "org-1",
+      projectId: trigger.runtimeProjectId,
+      machineId: null,
+      configurationRevisionId: revision.id,
+      triggerContext: {},
+      outputContext: {},
+      workflowStepRunId: step.id,
+    });
+    await database.linkWorkflowStepRunExecution(step.id, execution.id);
+    for (let index = 0; index < 105; index++)
+      await database.appendAgentExecutionLog({
+        executionId: execution.id,
+        recordedAt: receivedAt,
+        event: { text: String(index) },
+      });
+    const first = await dashboard.activityRunLogs(request, {
+      ...scope,
+      executionId: execution.id,
+      after: "0",
+    });
+    assert.equal(first.entries.length, 100);
+    assert.ok(first.nextCursor);
+    const last = await dashboard.activityRunLogs(request, {
+      ...scope,
+      executionId: execution.id,
+      after: first.nextCursor,
+    });
+    assert.equal(last.entries.length, 5);
+    assert.equal(last.nextCursor, null);
+    assert.deepEqual(last.entries[4]?.event, { text: "104" });
+    assert.equal(
+      (await dashboard.activityRunSnapshot(request, scope)).activity.steps[0]?.executionId,
+      execution.id,
+    );
+
+    const other = await new OrganizationTriggerStore(
+      database,
+      "org-1",
+      acceptingAgentValidator(),
+    ).save({ yaml: triggerYaml.replace("manual-task", "other-task"), userId: "user-1" });
+    await assert.rejects(
+      dashboard.activityRunSnapshot(request, { ...scope, triggerId: other.id }),
+      /run_unavailable/u,
+    );
+    await assert.rejects(
+      dashboard.activityRunSnapshot(request, { ...scope, organizationSlug: "other-org" }),
+      /tenant route not found/u,
+    );
+    await assert.rejects(
+      dashboard.activityRunLogs(request, {
+        ...scope,
+        executionId: "unrelated-execution",
+        after: "0",
+      }),
+      /run_unavailable/u,
+    );
+
+    const failureReason =
+      "Review tool access denied (Operation not permitted); no Review published";
+    await database.failWorkflowRun(created.run.id, "failed", failureReason, "run");
+    const failed = (await dashboard.snapshot(request, "acme")).activity[0];
+    assert.equal(failed?.status, "failed");
+    assert.equal(failed?.failureReason, failureReason);
+    assert.equal(
+      (await dashboard.activityRunSnapshot(request, scope)).activity.failureReason,
+      failureReason,
+    );
+  });
+
+  it("opens historical runs only through the matching migrated trigger", async () => {
+    const database = createMemoryDatabase({
+      memberships: [
+        {
+          userId: "user-1",
+          organizationId: "org-1",
+          organizationName: "Acme",
+          organizationSlug: "acme",
+          membershipId: "member-1",
+          role: "member",
+        },
+      ],
+    });
+    const project = await database.createProject({
+      organizationId: "org-1",
+      name: "Legacy",
+      slug: "legacy",
+      createdByUserId: null,
+    });
+    const bundle = compileHubBundle([
+      {
+        path: ".paseo/hub.yml",
+        content:
+          "environments:\n  runner: { kind: daemon, daemon: devbox, cwd: /workspace }\nagents:\n  coder: { provider: codex }\n",
+      },
+      ...["first", "second"].map((name) => ({
+        path: `.paseo/workflows/${name}.yml`,
+        content: `name: ${name}\non: manual.run\nmax_runtime: 2h\nsteps:\n  - id: work\n    environment: runner\n    max_runtime: 1h\n    idle_timeout: 10m\n    agent: coder\n    prompt: [{ text: Work }]\n`,
+      })),
+    ]);
+    const revision = await database.insertProjectConfigurationRevision({
+      projectId: project.id,
+      sourceKind: "manual",
+      sourceEvidence: {
+        kind: "manual",
+        bundle: { authoredHash: bundle.authoredHash, files: bundle.files },
+      },
+      normalizedConfiguration: bundle.configuration,
+      contentHash: bundle.authoredHash,
+    });
+    await database.activateProjectConfigurationRevision(project.id, revision.id);
+    const receipt = await database.persistManualEvent({
+      organizationId: "org-1",
+      projectId: project.id,
+      deliveryId: "historical",
+      source: "manual.run",
+      payload: { historical: true },
+      receivedAt: new Date(),
+    });
+    if (receipt.status !== "accepted") throw new Error("receipt rejected");
+    const created = await database.createAcceptedTriggerRun({
+      organizationId: "org-1",
+      projectId: project.id,
+      configurationRevisionId: revision.id,
+      providerEventReceiptId: receipt.event.providerEventReceiptId,
+      configuredTriggerName: "first",
+      prompt: "Historical prompt",
+      inputs: {},
+      triggerContext: {},
+      outputContext: {},
+      deadlineAt: new Date(Date.now() + 60_000),
+      stepIds: [],
+    });
+    await migrateLegacyProjectTriggers(database);
+    const triggers = await database.listOrganizationTriggers("org-1");
+    const first = triggers.find(({ name }) => name === "first")!;
+    const second = triggers.find(({ name }) => name === "second")!;
+    const dashboard = new TriggerDashboard(database, accountAuth(), acceptingAgentValidator());
+    const request = new Request("https://hub.test/o/acme/activity");
+    const scope = { organizationSlug: "acme", triggerId: first.id, runId: created.run.id };
+    assert.equal(
+      (await dashboard.activityRunSnapshot(request, scope)).activity.prompt,
+      "Historical prompt",
+    );
+    await assert.rejects(
+      dashboard.activityRunSnapshot(request, { ...scope, triggerId: second.id }),
+      /run_unavailable/u,
+    );
   });
 });
 

@@ -1,4 +1,6 @@
+/* oxlint-disable eslint-plugin-react-perf/jsx-no-jsx-as-prop -- each record composes its shared dialog trigger and table row */
 import { useSnapshotQuery } from "../queries/index.js";
+import { useCallback, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { DataCell, DataRow, DataTable, DataTableSkeleton } from "../components/app/data-table.js";
 import { FailureAlert } from "../components/app/failure-alert.js";
@@ -6,14 +8,17 @@ import { PageHeader } from "../components/app/page.js";
 import { RelativeTime } from "../components/app/relative-time.js";
 import { StatusPill, statusLabel } from "../components/app/status-pill.js";
 import { TwoLine } from "../components/app/two-line.js";
+import { DetailDialog, DetailDialogTrigger } from "../components/app/detail-dialog.js";
+import { Button } from "../components/ui/button.js";
 import { useRouteTenant } from "../projects/context.js";
-import { triggerSnapshot } from "./functions.js";
+import { triggerSnapshot, type TriggerSnapshot } from "./functions.js";
+import { ActivityDetail } from "./activity-detail.js";
 
 const ACTIVITY_COLUMNS = [
   { header: "Trigger", fill: true },
   { header: "Provider" },
   { header: "Source" },
-  { header: "Status" },
+  { header: "Status", fill: true },
   { header: "Received" },
 ];
 const EMPTY_ACTIVITY = { title: "No activity" };
@@ -55,25 +60,62 @@ export function TriggerActivityPanel() {
         empty={EMPTY_ACTIVITY}
       >
         {activity.map((run) => (
-          <DataRow key={run.id}>
-            <DataCell>
-              <TwoLine
-                primary={run.triggerName}
-                {...(run.repo === null ? {} : { secondary: run.repo })}
-              />
-            </DataCell>
-            <DataCell>{run.provider}</DataCell>
-            <DataCell>{run.source}</DataCell>
-            <DataCell>
-              <StatusPill tone={tone(run.status)}>{statusLabel(run.status)}</StatusPill>
-            </DataCell>
-            <DataCell muted>
-              <RelativeTime value={run.receivedAt} />
-            </DataCell>
-          </DataRow>
+          <ActivityRow key={run.id} run={run} organizationSlug={organizationSlug} />
         ))}
       </DataTable>
     </>
+  );
+}
+
+function ActivityRow({
+  run,
+  organizationSlug,
+}: {
+  run: TriggerSnapshot["activity"][number];
+  organizationSlug: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const select = useCallback(() => setOpen(true), []);
+  return (
+    <DetailDialog
+      open={open}
+      onOpenChange={setOpen}
+      title="Activity details"
+      description={run.triggerName}
+      trigger={
+        <DataRow onSelect={select}>
+          <DataCell>
+            <TwoLine
+              primary={
+                <DetailDialogTrigger asChild>
+                  <Button variant="link">{run.triggerName}</Button>
+                </DetailDialogTrigger>
+              }
+              {...(run.repo === null ? {} : { secondary: run.repo })}
+            />
+          </DataCell>
+          <DataCell>{run.provider}</DataCell>
+          <DataCell>{run.source}</DataCell>
+          <DataCell>
+            <TwoLine
+              primary={<StatusPill tone={tone(run.status)}>{statusLabel(run.status)}</StatusPill>}
+              {...(run.failureReason === null ? {} : { secondary: run.failureReason })}
+            />
+          </DataCell>
+          <DataCell muted>
+            <RelativeTime value={run.receivedAt} />
+          </DataCell>
+        </DataRow>
+      }
+    >
+      {open ? (
+        <ActivityDetail
+          organizationSlug={organizationSlug}
+          triggerId={run.triggerId}
+          runId={run.id}
+        />
+      ) : null}
+    </DetailDialog>
   );
 }
 

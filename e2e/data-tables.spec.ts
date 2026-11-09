@@ -150,7 +150,7 @@ test("a connected-only daemon's grant command gives way before the daemons table
   await projectApp(page).navigation.openOrganizationSection("Daemons");
 
   const table = page.getByRole("table", { name: "Daemons" });
-  await expect(table.getByTitle("paseo hub permissions grant hub.execute")).toBeAttached();
+  await expect(table.getByTitle("miko hub permissions grant hub.execute")).toBeAttached();
   await expect(
     table.getByRole("button", { name: "Actions for build-runner-eu-west-primary" }),
   ).toBeInViewport({ ratio: 1 });

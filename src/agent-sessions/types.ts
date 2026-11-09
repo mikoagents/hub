@@ -11,6 +11,7 @@ export interface AgentSessionRecord {
   daemonId: string;
   agentId: string | null;
   workspaceId: string | null;
+  runtimeBinding: { provider: string; nativeAgentId: string } | null;
   compatibility: string;
   creationOptions: DaemonCreateAgentOptions;
   capabilityTokenHash: string;

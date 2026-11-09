@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "vitest";
+import { Ajv } from "ajv";
+import { z } from "zod";
 import { AgentSessions } from "./index.js";
 import { createMemoryDatabase } from "../db/memory.js";
 import { OutputExecutorRegistry, replyOutputTool } from "../execution-capabilities/outputs.js";
@@ -17,7 +19,13 @@ class TestAgents implements AgentConnection {
   restorations = 0;
   async create(_key: string, options: DaemonCreateAgentOptions) {
     this.creates.push(options);
-    const agent = { id: randomUUID(), workspaceId: randomUUID(), status: "idle" as const };
+    const agent = {
+      id: randomUUID(),
+      workspaceId: randomUUID(),
+      status: "idle" as const,
+      provider: options.provider,
+      nativeAgentId: "native-agent",
+    };
     this.agents.set(agent.id, agent);
     return agent;
   }
@@ -162,8 +170,54 @@ async function fixture(now = Date.now) {
     const result: unknown = await response.json();
     return result;
   }
-  return { database, connection, sessions, replies, arrival, execution, call };
+  async function tools(executionId: string) {
+    const row = await execution(executionId);
+    const session = await database.findAgentSession(row.agentSessionId!);
+    const mcp = session!.creationOptions.mcpServers!["hub"]!;
+    const response = await capabilities.handleSession(
+      new Request(mcp.url, {
+        method: "POST",
+        headers: {
+          ...mcp.headers,
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+        },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+      }),
+      session!.id,
+    );
+    return z
+      .object({
+        result: z.object({
+          tools: z.array(
+            z.object({ name: z.string(), inputSchema: z.record(z.string(), z.unknown()) }),
+          ),
+        }),
+      })
+      .parse(await response.json());
+  }
+  return { database, connection, sessions, replies, arrival, execution, call, tools };
 }
+
+test("a discovered session completion schema accepts its required execution ID for both outcomes", async () => {
+  const f = await fixture();
+  const first = await f.arrival(null, "daemon", {}, "review", {
+    outputSchema: { type: "object", properties: { url: { type: "string" } }, required: ["url"] },
+  });
+  await first.dispatch();
+  const listed = await f.tools(first.executionId);
+  const tool = listed.result.tools.find((item) => item.name === "finish_execution");
+  if (!tool) throw new Error("completion tool missing");
+  const schema = tool.inputSchema;
+  const validate = new Ajv({ strict: true }).compile(schema);
+  expect(validate({ executionId: first.executionId, error: "Review tool access denied" })).toBe(
+    true,
+  );
+  expect(
+    validate({ executionId: first.executionId, output: { url: "https://github.test/review/1" } }),
+  ).toBe(true);
+  expect(validate({ error: "Missing execution identity" })).toBe(false);
+});
 
 test("same-key arrivals share an agent; an earlier completion cannot archive newer work", async () => {
   const f = await fixture();

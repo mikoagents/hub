@@ -32,6 +32,7 @@ import type { Locks } from "./runtime/locks/index.js";
 import type {
   AgentExecutionOutputAttempt,
   AgentExecutionRecord,
+  AgentExecutionLogRecord,
   AttachmentProvider,
   AttachmentRecord,
   ConfigurationSyncAttemptRecord,
@@ -1932,6 +1933,34 @@ class PgDatabase implements Database {
     } catch (error) {
       throw toDatabaseError(error);
     }
+  }
+
+  async appendAgentExecutionLog(input: Omit<AgentExecutionLogRecord, "id">): Promise<void> {
+    await query(
+      this.pool,
+      `insert into agent_execution_logs (execution_id, recorded_at, event) values ($1, $2, $3)`,
+      [input.executionId, input.recordedAt, input.event],
+    );
+  }
+
+  async listAgentExecutionLogs(executionId: string, after: string, limit: number) {
+    const rows = await query<{
+      id: string | bigint;
+      execution_id: string;
+      recorded_at: Date;
+      event: JsonValue;
+    }>(
+      this.pool,
+      `select * from agent_execution_logs where execution_id = $1 and id > $2
+       order by id limit $3`,
+      [executionId, after, Math.min(Math.max(limit, 1), 101)],
+    );
+    return rows.rows.map((row) => ({
+      id: String(row.id),
+      executionId: row.execution_id,
+      recordedAt: row.recorded_at,
+      event: row.event,
+    }));
   }
 
   async setAgentExecutionReactionState(

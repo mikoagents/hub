@@ -17,6 +17,7 @@ export class DaemonProviderCatalog {
       organizationSlug: string;
       daemonId: string;
       cwd?: string;
+
       refresh?: boolean;
     },
   ): Promise<HubProviderSnapshot> {

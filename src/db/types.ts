@@ -110,6 +110,13 @@ export interface MachineRecord {
   specs: unknown;
 }
 
+export interface AgentExecutionLogRecord {
+  id: string;
+  executionId: string;
+  recordedAt: Date;
+  event: JsonValue;
+}
+
 export interface AgentExecutionRecord {
   agentSessionId: string | null;
   agentSessionAction: import("../agent-sessions/index.js").AgentSessionAction | null;
@@ -1409,6 +1416,12 @@ export interface Database {
     completionTokenHash: string,
   ): Promise<AgentExecutionRecord>;
   findAgentExecutionById(id: string): Promise<AgentExecutionRecord | undefined>;
+  appendAgentExecutionLog(input: Omit<AgentExecutionLogRecord, "id">): Promise<void>;
+  listAgentExecutionLogs(
+    executionId: string,
+    after: string,
+    limit: number,
+  ): Promise<AgentExecutionLogRecord[]>;
   findAgentExecutionForOrganization(
     organizationId: string,
     id: string,

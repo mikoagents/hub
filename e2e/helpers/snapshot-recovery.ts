@@ -22,7 +22,7 @@ export class SnapshotRecovery {
 
   async openTriggers() {
     await this.visitTriggers();
-    await expect(this.page.getByRole("table", { name: "Triggers", exact: true })).toBeVisible();
+    await this.expectTrigger();
   }
 
   async seedTrigger() {

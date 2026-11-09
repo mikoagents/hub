@@ -292,7 +292,7 @@ function configurationView(
   };
 }
 
-function activityRunView(
+export function activityRunView(
   activity: ProjectActivityRunRecord,
   executions: (AgentExecutionRecord | undefined)[],
 ) {
@@ -315,6 +315,7 @@ function activityRunView(
     createdAt: run.createdAt.toISOString(),
     completedAt: run.completedAt?.toISOString() ?? null,
     steps: steps.map((step, index) => ({
+      executionId: step.agentExecutionId,
       agentId: executions[index]?.daemonAgentId ?? null,
       agentSessionId: executions[index]?.agentSessionId ?? null,
       agentSessionAction: executions[index]?.agentSessionAction ?? null,
@@ -398,7 +399,7 @@ function activityRunListView(activity: ProjectActivityRunListRecord) {
  * payload (see engine.ts), so it is decoded into a typed denial and summarized here rather than
  * shown as raw JSON; every other reason (timeouts, crashes) passes through unchanged.
  */
-function displayFailureReason(reason: string | null): string | null {
+export function displayFailureReason(reason: string | null): string | null {
   const denial = decodeEntitlementDenialFailureReason(reason);
   return denial === undefined ? reason : entitlementDenialSummary(denial);
 }

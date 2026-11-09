@@ -33,6 +33,7 @@ describeHubE2E("Paseo Hub cross-repository contract", () => {
     assert.equal(firstResult.duplicateRejected, true);
     await hub.sessionIsArchived(first.executionId);
     const session = await hub.sessionEvidence(first.executionId);
+    assert.notEqual(session.runtimeBinding.nativeAgentId, session.agentId);
     const second = await hub.runCapabilityTrigger("continuation-second", "one-thread");
     assert.equal(second.agentId, first.agentId);
     assert.deepEqual(await hub.sessionEvidence(second.executionId), session);
@@ -174,11 +175,10 @@ describeHubE2E("Paseo Hub cross-repository contract", () => {
     assert.deepEqual(denial, {
       type: "rpc_error",
       requestType: "daemon.get_status.request",
-      code: "access_denied",
+      code: "operation_unsupported",
     });
     assert.deepEqual(hub.relayEvidence(), {
-      enabled: false,
-      configuredOptions: [],
+      configured: false,
     });
     assert.equal(hub.daemonAttemptedRelayConnection(), false);
 

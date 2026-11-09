@@ -56,6 +56,18 @@ function legacyCompiledConfiguration(compiled: CompiledHubConfig): unknown {
 }
 
 describe("workflow compiler", () => {
+  it.each(["local", "workstation"])(
+    "rejects the removed backend selector %s in authored and stored agent settings",
+    (backend) => {
+      const authored = configuration();
+      Reflect.set(authored.triggers[0]!.steps[0]!.agent, "backend", backend);
+      assert.throws(() => compileHubConfig(authored));
+      const compiled = structuredClone(compileHubConfig(configuration()));
+      assert.equal(Reflect.set(compiled.triggers[0]!.steps[0]!.agent, "backend", backend), true);
+      assert.throws(() => parseCompiledHubConfig(compiled));
+    },
+  );
+
   it("round-trips the ready-for-review event and its actor allowlist", () => {
     const authored = configuration();
     authored.triggers[0]!.on = "github.pull_request_ready_for_review";

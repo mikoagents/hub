@@ -14,7 +14,7 @@ import { daemonsQueryKey } from "./status.js";
 const POLL_INTERVAL_MS = 2_000;
 
 /**
- * The origin `paseo hub login` resolves to when it is given no argument (`DEFAULT_HUB_ORIGIN` in
+ * The origin `miko hub login` resolves to when it is given no argument (`DEFAULT_HUB_ORIGIN` in
  * the CLI). Every other Hub has to be named on the command line, so the argument is omitted only
  * when this Hub is that one — no deployment flag, and nothing to configure per instance.
  */
@@ -24,11 +24,11 @@ const HOSTED_HUB_ORIGIN = "https://hub.paseo.sh";
  * What a daemon enrolled without `hub.execute` needs run on it before Hub can launch anything.
  * The CLI's login asks for that permission with a default of No, so this is the common case.
  */
-export const GRANT_EXECUTE_COMMAND = "paseo hub permissions grant hub.execute";
+export const GRANT_EXECUTE_COMMAND = "miko hub permissions grant hub.execute";
 
 /** The exact command to paste into a terminal on the machine that will run the agents. */
 export function daemonLoginCommand(origin: string): string {
-  return origin === HOSTED_HUB_ORIGIN ? "paseo hub login" : `paseo hub login ${origin}`;
+  return origin === HOSTED_HUB_ORIGIN ? "miko hub login" : `miko hub login ${origin}`;
 }
 
 /**

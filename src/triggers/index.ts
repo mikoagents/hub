@@ -36,6 +36,7 @@ export interface TriggerAgentConfig {
   provider: string;
   mode?: string | undefined;
   model?: string | undefined;
+
   thinkingOptionId?: string | undefined;
   options?: Readonly<Record<string, JsonValue>> | undefined;
 }

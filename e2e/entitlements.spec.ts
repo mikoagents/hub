@@ -148,14 +148,11 @@ test.describe("metered usage", () => {
         .getByRole("table", { name: "Trigger activity" })
         .getByRole("row")
         .filter({ has: page.getByRole("cell", { name: "deploy", exact: true }) });
-      // Organization activity is intentionally compact and has no legacy run-detail route. The
-      // durable-engine suite retains the exact entitlement-reason assertion.
+      // Failure reasons share the status cell; select the status text independently.
       await expect(async () => {
         await page.reload();
         await expect(deployRows).toHaveCount(2);
-        await expect(
-          deployRows.first().getByRole("cell", { name: "Failed", exact: true }),
-        ).toBeVisible();
+        await expect(deployRows.first().getByText("Failed", { exact: true })).toBeVisible();
       }).toPass({ timeout: 90_000, intervals: [1_000, 2_000, 5_000] });
       await page.screenshot({ path: `${SLICE_3_DIR}/02-execution-denied.png`, fullPage: true });
     });
