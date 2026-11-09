@@ -13,14 +13,16 @@ Public docs live in `getpaseo/paseo` under `public-docs/`. Follow the documentat
 Repository verification, release, cross-repository compatibility, and documentation procedures
 live in `MAINTAINERS.md`.
 
-# Fork workflow
+# Repository workflow
 
-This fork primarily serves our own use. Develop and integrate changes against `mikoagents/hub`
-and its `main` branch first; contributing selected changes upstream is secondary.
+This repository is independently maintained and is detached from GitHub’s fork network. Develop
+and integrate changes against `mikoagents/hub` and its `main` branch first; contributing selected
+changes upstream is secondary.
 
 `origin` points to `https://github.com/mikoagents/hub.git`; `upstream` points to
-`https://github.com/getpaseo/hub.git`. Upstream PRs and companion documentation PRs are not
-prerequisites for fork-only changes. When preparing an upstream contribution, use a focused
+`https://github.com/getpaseo/hub.git`. The `upstream` remote records the original source and supports
+manual synchronization; GitHub no longer maintains a fork relationship. Upstream PRs and companion
+documentation PRs are not prerequisites for Miko-only changes. When preparing an upstream contribution, use a focused
 branch and follow the upstream maintenance and documentation procedures.
 
 # Product Vision

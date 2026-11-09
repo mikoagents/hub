@@ -155,21 +155,30 @@ export class SourcePaseo {
     return z.array(z.unknown()).parse(value);
   }
 
+  async createUnrelatedLocalAgent(cwd: string): Promise<string> {
+    const result = await runCommand(
+      process.execPath,
+      [
+        fileURLToPath(new URL("./unrelated-agent.mjs", import.meta.url)),
+        this.paths.packagesRoot,
+        this.paths.daemonHost,
+        cwd,
+      ],
+      this.paths.packagesRoot,
+      sourceEnvironment(this.paths.paseoHome),
+    );
+    return z.string().min(1).parse(JSON.parse(result.stdout));
+  }
+
   async agentProvider(agentId: string): Promise<string> {
     agentId = await this.nativeAgentId(agentId);
-    const result = await this.run([
-      "agent",
-      "inspect",
-      agentId,
-      "--host",
-      this.paths.daemonHost,
-      "--json",
-    ]);
-    const provider = result["Provider"];
-    if (typeof provider !== "string" || provider.length === 0) {
-      throw new Error(`source agent ${agentId} did not report a provider`);
-    }
-    return provider;
+    const result = await runCommand(
+      process.execPath,
+      [TIMELINE_READER, this.paths.packagesRoot, this.paths.daemonHost, agentId, "provider"],
+      this.paths.packagesRoot,
+      sourceEnvironment(this.paths.paseoHome),
+    );
+    return z.string().min(1).parse(JSON.parse(result.stdout));
   }
 
   async processDescriptions(): Promise<string[]> {
@@ -411,11 +420,8 @@ function defaultConfig(daemonHost: string): unknown {
     version: 1,
     daemon: {
       listen: daemonHost,
-      relay: { enabled: false },
-      mcp: { enabled: false, injectIntoAgents: false },
       cors: { allowedOrigins: [] },
     },
-    features: { dictation: { enabled: false }, voiceMode: { enabled: false } },
   };
 }
 

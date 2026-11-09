@@ -196,8 +196,7 @@ describeHubE2E("Paseo Hub cross-repository contract", () => {
       code: "operation_unsupported",
     });
     assert.deepEqual(hub.relayEvidence(), {
-      enabled: false,
-      configuredOptions: [],
+      configured: false,
     });
     assert.equal(hub.daemonAttemptedRelayConnection(), false);
 

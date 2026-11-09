@@ -17,7 +17,7 @@
 
 ### Changed
 
-- Hub now requires the versioned Miko execution protocol. Upgrade after draining active work; old daemon registrations and continuation keys are retired by the cutover migration.
+- Hub now requires the versioned Miko execution protocol and targets its trimmed execution-only daemon distribution. Upgrade after draining active work; old daemon registrations and continuation keys are retired by the cutover migration.
 
 - Unhandled provider event receipts expire automatically after seven days on every instance. Receipts routed to a trigger or still referenced by a run or attachment remain available.
 

@@ -6,7 +6,9 @@ lifecycle. Provider options and permission modes keep their native semantics.
 
 The daemon lives in [mikoagents/miko-daemon](https://github.com/mikoagents/miko-daemon), derived from
 Paseo with its Git history and CLI → supervisor → worker → bootstrap architecture. Local execution
-uses its existing native session/provider manager. A configured Paseo backend uses that service's
+calls the inherited agent/session manager directly. Its distribution excludes the mobile/desktop/web
+applications, speech, relay, full plugin host, browser/terminal UI, resident scheduler and script proxy.
+The CLI exposes daemon, provider, backend and Hub management. A configured Paseo backend uses that service's
 native protocol and credentials; the remote service owns its agents and workspaces. The adapter
 never answers permission prompts or falls back to another backend.
 

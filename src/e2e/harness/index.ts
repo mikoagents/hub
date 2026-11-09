@@ -331,21 +331,13 @@ export class HubE2E {
   }
 
   async createUnrelatedLocalAgent(): Promise<string> {
-    const result = await this.cli([
-      "run",
-      "local unrelated activity",
-      "--provider",
-      "hub-e2e",
-      "--detach",
-      "--cwd",
-      this.workspace,
-      "--host",
-      this.daemonHost,
-      "--json",
-    ]).catch((error: unknown) => {
-      throw new Error(`Local agent creation failed\n${this.failureArtifacts()}`, { cause: error });
-    });
-    return requiredString(result, "agentId");
+    return this.requireSource()
+      .createUnrelatedLocalAgent(this.workspace)
+      .catch((error: unknown) => {
+        throw new Error(`Local agent creation failed\n${this.failureArtifacts()}`, {
+          cause: error,
+        });
+      });
   }
 
   async installProductionConfiguration(
@@ -1016,11 +1008,7 @@ export class HubE2E {
   relayEvidence() {
     const source = this.requireSource();
     const config = this.paseoConfig(source.paths.packagesRoot, source.paths.daemonHost);
-    const relayOptions = Object.keys(config.daemon.relay).filter((key) => key !== "enabled");
-    return {
-      enabled: config.daemon.relay.enabled,
-      configuredOptions: relayOptions,
-    };
+    return { configured: Object.hasOwn(config.daemon, "relay") };
   }
 
   daemonAttemptedRelayConnection(): boolean {
@@ -1503,8 +1491,6 @@ export class HubE2E {
       version: 1,
       daemon: {
         listen: daemonHost,
-        relay: { enabled: false },
-        mcp: { enabled: false, injectIntoAgents: false },
         cors: { allowedOrigins: [] },
       },
       ...(this.options.realAgent === true
@@ -1530,15 +1516,7 @@ export class HubE2E {
               },
             },
           }),
-      features: {
-        dictation: { enabled: false },
-        voiceMode: { enabled: false },
-      },
     };
-  }
-
-  private async cli(args: string[]): Promise<Record<string, unknown>> {
-    return this.requireSource().run(args);
   }
 
   private async dispatchManualRun(input: {

@@ -16,7 +16,7 @@ permissions:
 # companion PR creator commits it. Source-built jobs deliberately fail until it
 # is one exact 40-character SHA; mutable refs and repository variables are forbidden.
 env:
-  MIKO_E2E_COMMIT: 1b340acb2cfe179444c77936d90238100dcfcfe4
+  MIKO_E2E_COMMIT: b5a5af24eee2c4758a36fb946f97dd3e5dcf0233
 
 jobs:
   typecheck:

@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-const [packagesRoot, daemonHost, agentId] = process.argv.slice(2);
+const [packagesRoot, daemonHost, agentId, mode] = process.argv.slice(2);
 if (!packagesRoot || !daemonHost || !agentId) {
   throw new Error("usage: timeline-reader <packages-root> <daemon-host> <agent-id>");
 }
@@ -27,13 +27,19 @@ const client = new DaemonClient({
 
 try {
   await client.connect();
-  const timeline = await client.fetchAgentTimeline(agentId, {
-    direction: "tail",
-    projection: "canonical",
-    limit: 200,
-    timeout: 10_000,
-  });
-  process.stdout.write(`${JSON.stringify(timeline.entries.map((entry) => entry.item))}\n`);
+  if (mode === "provider") {
+    const result = await client.fetchAgent(agentId);
+    if (!result) throw new Error("Native agent not found");
+    process.stdout.write(`${JSON.stringify(result.agent.provider)}\n`);
+  } else {
+    const timeline = await client.fetchAgentTimeline(agentId, {
+      direction: "tail",
+      projection: "canonical",
+      limit: 200,
+      timeout: 10_000,
+    });
+    process.stdout.write(`${JSON.stringify(timeline.entries.map((entry) => entry.item))}\n`);
+  }
 } finally {
   await client.close();
 }
