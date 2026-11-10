@@ -1,0 +1,20 @@
+/** Operator-owned business policy. Change this file without changing Hub. */
+export const policy = {
+  version: "v1",
+  repository: "example/project",
+  connection: "github",
+  runner: "local",
+  daemon: "review-worker",
+  cwd: "/workspace/repository",
+  agent: { provider: "codex", mode: "full-access" },
+  trustedAuthors: ["replace-with-your-login"],
+  botLogin: "replace-with-your-app[bot]",
+  requiredWorkflows: ["CI"],
+  maxFixRounds: 3,
+  maxConsecutiveBotCommits: 3,
+  maxVerificationRounds: 2,
+  maxCiEvents: 50,
+  maxPages: 10,
+  completeLabel: "review:complete",
+  incompleteMarker: "REVIEW INCOMPLETE",
+};

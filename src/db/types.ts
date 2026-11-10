@@ -355,7 +355,7 @@ export interface OrganizationTriggerRecord {
   organizationId: string;
   name: string;
   enabled: boolean;
-  format: "single_run" | "legacy_multistep";
+  format: "single_run" | "legacy_multistep" | "code";
   /** Temporary workflow-engine adapter; never exposed as a product project. */
   runtimeProjectId: string;
   activeRevisionId: string;
@@ -376,6 +376,11 @@ export interface OrganizationTriggerRevisionRecord {
   createdByUserId: string | null;
   createdAt: Date;
 }
+
+export type OrganizationTriggerRevisionSummary = Pick<
+  OrganizationTriggerRevisionRecord,
+  "id" | "version" | "contentHash" | "sourceKind" | "createdAt"
+>;
 
 export interface PendingProjectTriggerMigration {
   project: ProjectRecord;
@@ -1113,7 +1118,7 @@ export interface OrganizationTriggerRoute {
 
 export interface MigrateProjectTriggerInput {
   name: string;
-  format: "single_run" | "legacy_multistep";
+  format: "single_run" | "legacy_multistep" | "code";
   enabled: boolean;
   yaml: string;
   normalizedConfiguration: unknown;
@@ -1135,7 +1140,7 @@ export interface SaveOrganizationTriggerInput {
   triggerId?: string;
   name: string;
   enabled: boolean;
-  format: "single_run" | "legacy_multistep";
+  format: "single_run" | "legacy_multistep" | "code";
   yaml: string;
   normalizedConfiguration: unknown;
   contentHash: string;
@@ -1208,6 +1213,8 @@ export interface TerminateMachineFields {
 }
 
 export interface Database {
+  readonly triggerCode: import("../triggers/code/records.js").TriggerCodeRepository;
+  readonly sessionTimelines: import("../session-timelines/store.js").SessionTimelineStore;
   readonly executionAuthority: import("../execution-authority/index.js").ExecutionAuthorityStore;
   readonly schedules: import("../triggers/schedule/index.js").ScheduleStore;
   findAgentSessionByKey(
@@ -1545,6 +1552,10 @@ export interface Database {
   listPendingProjectTriggerMigrations(): Promise<PendingProjectTriggerMigration[]>;
   migrateProjectTriggers(input: MigrateProjectTriggersInput): Promise<OrganizationTriggerRecord[]>;
   listOrganizationTriggers(organizationId: string): Promise<OrganizationTriggerRecord[]>;
+  listOrganizationTriggerRevisions(
+    organizationId: string,
+    triggerId: string,
+  ): Promise<OrganizationTriggerRevisionSummary[]>;
   findOrganizationTriggerRevision(
     triggerId: string,
     revisionId: string,

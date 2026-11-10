@@ -3,7 +3,7 @@ FROM node:22-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json .npmrc ./
 RUN npm ci
-COPY tsconfig.json tsconfig.start.json vite.config.ts drizzle.config.ts ./
+COPY tsconfig.json tsconfig.start.json tsconfig.triggers.json vite.config.ts drizzle.config.ts ./
 COPY drizzle/ drizzle/
 COPY src/ src/
 RUN npm run build

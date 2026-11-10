@@ -8,6 +8,9 @@ import {
   AgentSnapshotSchema,
   ProviderSnapshotSchema,
   ValidationResultSchema,
+  TimelinePageSchema,
+  type TimelineOptions,
+  type TimelinePage,
   type ExecutionRequest,
   type AgentEvent,
 } from "../../miko/protocol.js";
@@ -15,6 +18,7 @@ import type { DaemonCreateAgentOptions } from "../protocol.js";
 import { DaemonResponseLostError } from "../protocol.js";
 export type { AgentSnapshot, AgentEvent } from "../../miko/protocol.js";
 export interface AgentConnection {
+  timeline(agentId: string, options: TimelineOptions): Promise<TimelinePage>;
   create(
     key: string,
     options: DaemonCreateAgentOptions,
@@ -85,6 +89,9 @@ export class DaemonAgents implements AgentConnection {
     const agent = AgentSnapshotSchema.parse(await this.request("get", { agentId }));
     this.workspaces.set(agent.workspaceId, agent.id);
     return agent;
+  }
+  async timeline(agentId: string, options: TimelineOptions) {
+    return TimelinePageSchema.parse(await this.request("timeline", { agentId, ...options }));
   }
   async send(agentId: string, messageId: string, text: string, timeoutMs?: number): Promise<void> {
     await this.durable(

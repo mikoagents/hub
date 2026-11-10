@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { isolatedProcessEnvironment } from "../../test-utils/isolated-environment.js";
 
 const exec = promisify(execFile);
 const SENSITIVE_FLAGS = new Set(["--api-key", "--credential", "--password", "--secret", "--token"]);
@@ -13,7 +14,7 @@ export async function runCommand(
   try {
     return await exec(command, args, {
       cwd,
-      env: { ...process.env, ...env },
+      env: isolatedProcessEnvironment(env),
       maxBuffer: 10_000_000,
     });
   } catch {

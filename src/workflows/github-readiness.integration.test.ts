@@ -105,6 +105,46 @@ it("user spends no model tokens on clean, stale, closed, draft or incomplete pul
   }
 }, 60_000);
 
+it("user resumes unfinished verification once after CI settles without looping on follow-up reviews", async () => {
+  const fixture = await readinessFixture(true, false, true);
+  try {
+    // Given an explicitly enabled follow-up for a submitted but unfinished review.
+    fixture.remote.review();
+    fixture.remote.state.reviews[0]!.body += " REVIEW INCOMPLETE";
+    fixture.remote.finish("Repository Checks", "success");
+    await fixture.deliver("pull_request_review");
+    assert.equal(await fixture.executions(), 0);
+
+    // When the independent CI evidence arrives, duplicate sources start one bounded workflow.
+    fixture.remote.finish("Coverage", "success");
+    await fixture.deliver("workflow_run");
+    await fixture.deliver("pull_request_review");
+    await fixture.engine.processAvailable();
+    assert.equal(await fixture.executions(), 1);
+    assert(!fixture.remote.labels.has("ai-complete"));
+    await fixture.complete();
+    await fixture.restart();
+
+    // Another incomplete receipt and unrelated green CI cannot restart that head's work.
+    fixture.remote.state.reviews[0]!.id += 1;
+    fixture.remote.state.reviews[0]!.body += "\nVerification still missing.";
+    fixture.remote.finish("Help CI", "success");
+    await fixture.deliver("pull_request_review");
+    await fixture.deliver("workflow_run");
+    await fixture.engine.processAvailable();
+    assert.equal(await fixture.executions(), 1);
+    assert.equal(await fixture.runs(), 1);
+
+    // Only a verified clean review closes the existing completion gate.
+    fixture.remote.state.reviews[0]!.body = "review protocol clean result";
+    await fixture.deliver("pull_request_review");
+    assert(fixture.remote.labels.has("ai-complete"));
+    assert.equal(await fixture.executions(), 1);
+  } finally {
+    await fixture.close();
+  }
+}, 60_000);
+
 it("user skips queued repairs before model creation when their head becomes obsolete", async () => {
   // Given ready repair input accepted before the worker dispatches it.
   const fixture = await readinessFixture();
@@ -303,7 +343,11 @@ class GitHubPullRequest {
   }
 }
 
-async function readinessFixture(withCompletionLabel = false, withRepairLimit = false) {
+async function readinessFixture(
+  withCompletionLabel = false,
+  withRepairLimit = false,
+  withIncompleteReview = false,
+) {
   const root = await mkdtemp(join(tmpdir(), "hub-readiness-"));
   let bundle = await embeddedDatabaseRuntime(root);
   await bundle.runtime.migrate();
@@ -347,6 +391,7 @@ run:
       review: {from_user: 'reviewer[bot]', body_contains: 'review protocol'}
       feedback_from: ['reviewer[bot]', 'codex[bot]']
       required_workflows: [Coverage, Repository Checks]
+${withIncompleteReview ? "      incomplete_review: {body_contains: 'REVIEW INCOMPLETE'}" : ""}
 ${withRepairLimit ? "      repair_limit: {from_user: 'repairer[bot]', max_consecutive_commits: 3}" : ""}
 ${withCompletionLabel ? "      completion_label: {name: ai-complete, color: '0E8A16', description: AI complete, review_body_contains: 'clean result'}" : ""}
   prompt: Repair

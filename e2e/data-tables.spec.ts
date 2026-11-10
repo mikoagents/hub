@@ -1,6 +1,7 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 import { test } from "./app.js";
 import { projectApp } from "./helpers/projects/index.js";
+import { artifactDigest, type TriggerArtifact } from "../src/triggers/code/contract.js";
 import { OrganizationTriggers } from "./helpers/triggers.js";
 
 const WORKSPACES = "/srv/workspaces/acme/projects";
@@ -13,69 +14,50 @@ const owner = {
 
 interface SeededTrigger {
   name: string;
-  on: string;
-  /** The event kind the row leads with. */
-  kind: string;
-  cwd: string;
-  /** What narrows a schedule: any length, so it may be cut. */
-  recurrence?: true;
-  lastRun?: { minutesAgo: number; status: "running" | "succeeded" | "failed" };
+  source: string;
+  event: string;
+  summary: string;
+  connection?: string;
 }
-
 const TRIGGERS: readonly SeededTrigger[] = [
   {
     name: "issue-comment-triage",
-    on: "github.issue_comment_created:\n    connection: acme-inc\n    filters:\n      from_users: [maintainer]",
-    kind: "GitHub issue comment created",
-    cwd: `${WORKSPACES}/widgets`,
-    lastRun: { minutesAgo: 8, status: "running" },
+    source: "github",
+    event: "issue_comment.created",
+    summary: "GitHub issue comment created",
+    connection: "acme-inc",
   },
   {
     name: "pull-request-review-followup",
-    on: "github.pull_request_comment_created:\n    connection: acme-inc\n    filters:\n      from_users: [maintainer]",
-    kind: "GitHub pull request comment created",
-    cwd: `${WORKSPACES}/widgets-review`,
-    lastRun: { minutesAgo: 23, status: "succeeded" },
+    source: "github",
+    event: "pull_request_review.*",
+    summary: "GitHub pull request review events",
+    connection: "acme-inc",
   },
   {
     name: "discord-support-mention",
-    on: "discord.mention:\n    connection: community-discord\n    filters:\n      from_users: [maintainer]",
-    kind: "Discord mention",
-    cwd: `${WORKSPACES}/community-bot`,
+    source: "discord",
+    event: "mention",
+    summary: "Discord mention",
+    connection: "community-discord",
   },
   {
     name: "slack-help",
-    on: "slack.mention:\n    connection: company-slack\n    filters:\n      from_users: [maintainer]",
-    kind: "Slack mention",
-    cwd: `${WORKSPACES}/platform/infrastructure-runbooks`,
-    lastRun: { minutesAgo: 53, status: "failed" },
+    source: "slack",
+    event: "mention",
+    summary: "Slack mention",
+    connection: "company-slack",
   },
+  { name: "manual-incident-review", source: "manual", event: "run", summary: "Manual run" },
   {
-    name: "nightly-dependency-audit",
-    on: 'schedule.tick:\n    recurrence:\n      start: "2026-01-01T08:15:00"\n      rule: FREQ=DAILY;BYHOUR=8,16;BYMINUTE=15\n      timezone: Europe/Berlin',
-    kind: "Schedule",
-    recurrence: true,
-    cwd: `${WORKSPACES}/widgets`,
-    lastRun: { minutesAgo: 125, status: "succeeded" },
-  },
-  {
-    name: "manual-incident-review",
-    on: "manual.run: {}",
-    kind: "Manual run",
-    cwd: `${WORKSPACES}/platform/incident-postmortems`,
-    lastRun: { minutesAgo: 60 * 26, status: "succeeded" },
-  },
-  {
-    // Two events is a document the form cannot represent, so the row has no form target.
-    name: "schedule-healthcheck-20260910",
-    on: 'schedule.tick:\n    recurrence:\n      start: "2026-01-01T06:00:00"\n      rule: FREQ=DAILY\n      timezone: UTC\n  manual.run: {}',
-    kind: "Schedule",
-    cwd: `${WORKSPACES}/widgets`,
-    lastRun: { minutesAgo: 11, status: "running" },
+    name: "scheduled-health-check",
+    source: "schedule",
+    event: "tick",
+    summary: "Schedule",
   },
 ];
 
-test("the trigger list cuts paths and details before names, event kinds, and times", async ({
+test("the Trigger list fits readable events and last-run results without horizontal overflow", async ({
   hub,
   page,
 }) => {
@@ -91,25 +73,9 @@ test("the trigger list cuts paths and details before names, event kinds, and tim
 
   await test.step("seed triggers of every kind", async () => {
     await triggers.open();
-    for (const trigger of TRIGGERS) {
-      await triggers.startNew();
-      // The YAML editor opens from a valid form; the document then replaces it wholesale.
-      await triggers.configureManual({
-        name: trigger.name,
-        daemon,
-        cwd: trigger.cwd,
-        agent: "opencode/gateway/vendor/model-v1",
-        mode: "full-access",
-        thinking: "low",
-        prompt: "Handle the event.",
-      });
-      await triggers.switchToYaml();
-      await triggers.replaceYaml(triggerYaml(trigger, daemon));
-      await triggers.save(trigger.name);
-    }
-    for (const trigger of TRIGGERS) {
-      if (trigger.lastRun !== undefined) await hub.seedTriggerRun(trigger.name, trigger.lastRun);
-    }
+    for (const trigger of TRIGGERS)
+      await hub.deployCodeTrigger("owner", triggerArtifact(trigger, daemon));
+    await triggers.open();
   });
 
   // The first column used to keep every spare pixel, so the rest were cut to their headers:
@@ -119,23 +85,47 @@ test("the trigger list cuts paths and details before names, event kinds, and tim
     for (const trigger of TRIGGERS) {
       const cells = rowCells(table, trigger.name);
       await expectWhole(cells.nth(0), trigger.name);
-      await expectWhole(cells.nth(1), trigger.kind);
+      await expectWhole(cells.nth(1), trigger.summary);
     }
   });
 
-  await test.step("at 1280px times and connections are whole too, and a path keeps its tail", async () => {
+  await test.step("at 1280px models, events, targets, last triggers and status are visible", async () => {
     await showAt(page, 1280, table);
+    await expect(table.getByRole("columnheader")).toHaveText([
+      "Trigger",
+      "Event",
+      "Target",
+      "Last triggered",
+      "Status",
+    ]);
     for (const trigger of TRIGGERS) {
       const cells = rowCells(table, trigger.name);
       await expectWhole(cells.nth(0), trigger.name);
-      if (trigger.recurrence === true) await expectWhole(cells.nth(1), trigger.kind);
-      else await expectWhole(cells.nth(1));
+      await expect(cells.nth(0)).toContainText("codex/gpt-6.1-sol");
+      await expectWhole(cells.nth(1), trigger.summary);
+      if (trigger.connection) await expect(cells.nth(1)).toContainText(trigger.connection);
+      await expect(cells.nth(2)).toContainText(daemon);
+      await expect(
+        cells.nth(2).getByTitle(`${WORKSPACES}/platform/infrastructure-runbooks`),
+      ).toBeVisible();
+      await expect(cells.nth(3)).toHaveText("Never");
+      await expect(cells.nth(4)).toHaveText("Enabled");
       await expectWhole(cells.nth(3));
+      await expectWhole(cells.nth(4));
     }
-    const path = rowCells(table, "slack-help")
-      .nth(2)
-      .getByTitle(`${WORKSPACES}/platform/infrastructure-runbooks`);
-    expect(await endsInView(path)).toBe(true);
+    await expect(rowCells(table, "scheduled-health-check").nth(1)).toContainText(
+      "Every day at 00:00 (UTC)",
+    );
+  });
+
+  await test.step("on a phone the name, model and status fit without scrolling", async () => {
+    await showAt(page, 390, table);
+    await expect(table.getByRole("columnheader")).toHaveText(["Trigger", "Status"]);
+    for (const trigger of TRIGGERS) {
+      const cells = rowCells(table, trigger.name);
+      await expect(cells.nth(0)).toContainText("codex/gpt-6.1-sol");
+      await expect(cells.nth(1)).toHaveText("Enabled");
+    }
   });
 });
 
@@ -189,35 +179,38 @@ async function scrollsSideways(table: Locator): Promise<boolean> {
   });
 }
 
-/** Whether the last character of the line is inside the line's box. */
-async function endsInView(line: Locator): Promise<boolean> {
-  return line.evaluate((element) => {
-    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-    let last: Text | null = null;
-    while (walker.nextNode()) last = walker.currentNode as Text;
-    if (last === null || last.length === 0) return false;
-    const range = document.createRange();
-    range.setStart(last, last.length - 1);
-    range.setEnd(last, last.length);
-    const box = element.getBoundingClientRect();
-    const character = range.getBoundingClientRect();
-    return character.left >= box.left && character.right <= box.right + 0.5;
-  });
-}
-
-function triggerYaml(trigger: SeededTrigger, daemon: string) {
-  return `name: ${trigger.name}
-enabled: true
-on:
-  ${trigger.on}
-run:
-  target:
-    daemon: ${daemon}
-    cwd: ${trigger.cwd}
-  agent:
-    provider: opencode
-    model: gateway/vendor/model-v1
-    mode: full-access
-  prompt: Handle the event.
-`;
+function triggerArtifact(trigger: SeededTrigger, daemon: string): TriggerArtifact {
+  const code =
+    'export default {run(ctx){return ctx.agent.run("review",{target:"review",agent:{provider:"codex",model:"gpt-6.1-sol"},prompt:"Review",maxRuntime:"5m",idleTimeout:"1m"})}};';
+  const body = {
+    format: "trigger-code-v1" as const,
+    manifest: {
+      name: trigger.name,
+      description: `Operator-owned project with configuration under ${WORKSPACES}/platform/infrastructure-runbooks`,
+      runner: "local",
+      on: [
+        {
+          source: trigger.source,
+          event: trigger.event,
+          ...(trigger.connection === undefined ? {} : { connection: trigger.connection }),
+          ...(trigger.source === "schedule"
+            ? { recurrence: { start: "2098-01-01T00:00:00", timezone: "UTC", rule: "FREQ=DAILY" } }
+            : {}),
+        },
+      ],
+      grants: {
+        targets: {
+          review: {
+            daemon,
+            cwd: `${WORKSPACES}/platform/infrastructure-runbooks`,
+            providers: ["codex"],
+          },
+        },
+      },
+      limits: { maxRuntime: "1h" },
+    },
+    code,
+    sources: [{ path: "trigger.ts", content: code }],
+  };
+  return { ...body, digest: artifactDigest(body) };
 }

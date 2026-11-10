@@ -11,6 +11,10 @@ export const GitHubPullRequestPolicySchema = z
       .strict(),
     feedback_from: z.array(z.string().min(1)).min(1),
     required_workflows: z.array(z.string().min(1)).min(1),
+    incomplete_review: z
+      .object({ body_contains: z.string().min(1) })
+      .strict()
+      .optional(),
     repair_limit: z
       .object({
         from_user: z.string().min(1),

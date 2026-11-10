@@ -1,14 +1,16 @@
 #!/bin/sh
 set -eu
 
-image="paseo-hub-phase-zero-smoke"
+image="paseo-hub-phase-zero-smoke-$$"
 container="paseo-hub-phase-zero-smoke-$$"
 database="paseo-hub-phase-zero-postgres-$$"
 network="paseo-hub-phase-zero-smoke-$$"
+smoke_password="local-smoke-postgres"
 
 cleanup() {
   docker stop "$container" "$database" >/dev/null 2>&1 || true
   docker network rm "$network" >/dev/null 2>&1 || true
+  docker image rm "$image" >/dev/null 2>&1 || true
 }
 
 trap cleanup EXIT INT TERM
@@ -19,8 +21,8 @@ if [ -n "${DOCKER_SMOKE_SUBNET:-}" ]; then
 else
   docker network create "$network" >/dev/null
 fi
-docker run --detach --rm --name "$database" --network "$network" \
-  --env POSTGRES_PASSWORD=postgres \
+docker run --detach --rm --cpus 1 --memory 512m --name "$database" --network "$network" \
+  --env "POSTGRES_PASSWORD=$smoke_password" \
   --env POSTGRES_DB=paseo_hub \
   postgres:17-alpine >/dev/null
 
@@ -34,8 +36,8 @@ until docker exec "$database" pg_isready --username postgres --dbname paseo_hub 
   sleep 1
 done
 
-docker run --detach --rm --name "$container" --network "$network" \
-  --env "DATABASE_URL=postgres://postgres:postgres@$database:5432/paseo_hub" \
+docker run --detach --rm --cpus 1 --memory 768m --name "$container" --network "$network" \
+  --env "DATABASE_URL=postgres://postgres:$smoke_password@$database:5432/paseo_hub" \
   --publish 127.0.0.1::3000 \
   "$image" >/dev/null
 

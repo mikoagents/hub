@@ -48,7 +48,11 @@ import {
 } from "../projects/context.js";
 import { SidebarHelp } from "../auth/sidebar-help.js";
 import { ExecutionMeter } from "../entitlements/ui/index.js";
-import { NavigationGroup, type NavigationItem } from "./navigation-group.js";
+import {
+  NavigationGroup,
+  type NavigationItem,
+  type NavigationSection,
+} from "./navigation-group.js";
 import { SidebarIdentity } from "./sidebar-switcher.js";
 import {
   AccountMenu,
@@ -333,7 +337,7 @@ function Destinations({
       <NavigationGroup
         label="Instance"
         back={wayBack(`/o/${organization.slug}/home`, `Back to ${organization.name}`)}
-        items={INSTANCE_DESTINATIONS}
+        sections={INSTANCE_SECTIONS}
       />
     );
   }
@@ -341,7 +345,7 @@ function Destinations({
     return (
       <NavigationGroup
         label="Organization"
-        items={destinations(`/o/${organization.slug}`, ORGANIZATION_SECTIONS)}
+        sections={destinationSections(`/o/${organization.slug}`, ORGANIZATION_SECTIONS)}
       />
     );
   }
@@ -349,7 +353,10 @@ function Destinations({
     <NavigationGroup
       label="Project"
       back={wayBack(`/o/${organization.slug}/projects`, "All projects")}
-      items={destinations(`/o/${organization.slug}/projects/${project.slug}`, PROJECT_SECTIONS)}
+      sections={destinationSections(
+        `/o/${organization.slug}/projects/${project.slug}`,
+        PROJECT_SECTIONS,
+      )}
     />
   );
 }
@@ -368,6 +375,21 @@ interface SectionDestination {
   subtree?: boolean;
 }
 
+interface SectionDestinations {
+  label?: string;
+  items: readonly SectionDestination[];
+}
+
+function destinationSections(
+  base: string,
+  sections: readonly SectionDestinations[],
+): NavigationSection[] {
+  return sections.map((section) => {
+    const items = destinations(base, section.items);
+    return section.label === undefined ? { items } : { label: section.label, items };
+  });
+}
+
 function destinations(base: string, sections: readonly SectionDestination[]): NavigationItem[] {
   return sections.map((entry) => ({
     to: `${base}/${entry.section}`,
@@ -377,27 +399,47 @@ function destinations(base: string, sections: readonly SectionDestination[]): Na
   }));
 }
 
-// Where you are, then work, then administration. Home is the landing and says what to do next;
-// Team, API keys, Usage, and Billing are configured once and read occasionally, so they sit
-// behind Settings rather than competing with the surfaces an operator opens daily.
-const ORGANIZATION_SECTIONS: readonly SectionDestination[] = [
-  { section: "home", label: "Home", icon: House },
-  { section: "triggers", label: "Triggers", icon: Zap, subtree: true },
-  { section: "activity", label: "Activity", icon: History },
-  { section: "daemons", label: "Daemons", icon: Cpu },
-  { section: "connections", label: "Connections", icon: Cable },
-  { section: "settings", label: "Settings", icon: Settings, subtree: true },
+// Home stands on its own; the remaining destinations are grouped by the task they support.
+// Organization administration still lives behind one Settings entry.
+const ORGANIZATION_SECTIONS: readonly SectionDestinations[] = [
+  { items: [{ section: "home", label: "Home", icon: House }] },
+  {
+    label: "Workflows",
+    items: [
+      { section: "triggers", label: "Triggers", icon: Zap, subtree: true },
+      { section: "activity", label: "Activity", icon: History },
+    ],
+  },
+  {
+    label: "Infrastructure",
+    items: [
+      { section: "daemons", label: "Daemons", icon: Cpu },
+      { section: "connections", label: "Connections", icon: Cable },
+    ],
+  },
+  {
+    label: "Administration",
+    items: [{ section: "settings", label: "Settings", icon: Settings, subtree: true }],
+  },
 ];
-const PROJECT_SECTIONS: readonly SectionDestination[] = [
-  { section: "overview", label: "Overview", icon: Gauge },
-  { section: "configuration", label: "Configuration", icon: SlidersHorizontal },
-  { section: "activity", label: "Activity", icon: History },
-  { section: "settings", label: "Settings", icon: Settings },
+const PROJECT_SECTIONS: readonly SectionDestinations[] = [
+  {
+    items: [
+      { section: "overview", label: "Overview", icon: Gauge },
+      { section: "configuration", label: "Configuration", icon: SlidersHorizontal },
+      { section: "activity", label: "Activity", icon: History },
+      { section: "settings", label: "Settings", icon: Settings },
+    ],
+  },
 ];
 // Instance destinations sit outside the organization hierarchy.
-const INSTANCE_DESTINATIONS: readonly NavigationItem[] = [
-  { to: "/apps", label: "Apps", icon: Blocks },
-  { to: "/operator", label: "Operator", icon: ShieldCheck },
+const INSTANCE_SECTIONS: readonly NavigationSection[] = [
+  {
+    items: [
+      { to: "/apps", label: "Apps", icon: Blocks },
+      { to: "/operator", label: "Operator", icon: ShieldCheck },
+    ],
+  },
 ];
 
 /**

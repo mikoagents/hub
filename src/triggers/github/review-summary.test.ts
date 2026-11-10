@@ -63,6 +63,17 @@ it("user keeps incomplete current review status even when folded history contain
   assert.equal(complete, false);
 });
 
+it("user explicitly enables supplemental verification without replaying historical incomplete verdicts", () => {
+  const snapshot = reviewed("protocol REVIEW INCOMPLETE");
+  const target = { repository: "owner/repo", number: 1058 };
+  assert.equal(readyPullRequestKey(target, "head", policy, snapshot), undefined);
+  const enabled = { ...policy, incomplete_review: { body_contains: "REVIEW INCOMPLETE" } };
+  assert.equal(typeof readyPullRequestKey(target, "head", enabled, snapshot), "string");
+  snapshot.reviews[0]!.body = "protocol clean result\n<details>REVIEW INCOMPLETE</details>";
+  assert.equal(readyPullRequestKey(target, "head", enabled, snapshot), undefined);
+  assert.equal(pullRequestComplete(snapshot, enabled), true);
+});
+
 function reviewed(body: string): PullRequestSnapshot {
   return {
     state: "OPEN",

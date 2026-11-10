@@ -1,5 +1,11 @@
 # Workflow event coordination
 
+New organization Triggers use the [programmable Trigger SDK](programmable-triggers.md).
+Business filters, CI/review/fix loops, claims and locking live in the
+[GitHub review code project](../examples/triggers/github-review). The YAML contracts below
+describe historical/project workflow execution retained for existing runs; they are not the new
+Trigger authoring interface.
+
 CI follow-ups use `github.workflow_run_completed`. The GitHub App must subscribe to
 **Workflow run** and have **Actions: read** and **Pull requests: read**. Only completed
 workflows whose original event was `pull_request` match the semantic event, including
@@ -88,6 +94,28 @@ configured feedback authors, or a current-head review from those authors with
 `CHANGES_REQUESTED` state or `CHANGES REQUESTED` in its body. Clean approval and unrelated
 successful CI notifications need no agent. This is a routing hint, not a replacement for
 the agent verifying findings, logs and repository-specific required checks.
+
+To also finish verification left open by the configured reviewer, explicitly enable:
+
+```yaml
+incomplete_review: { body_contains: "REVIEW INCOMPLETE" }
+```
+
+This field belongs under `github_pull_request`. Once the required and known workflows
+settle, an incomplete current review can start supplemental verification even without a
+confirmed defect or failed CI. Only the summary before the first HTML `details` block is
+matched. The accepted verification identity is stable for the PR head and review policy:
+another incomplete receipt, base update, or unrelated successful workflow does not start
+the work again. The claim survives failure and restart. Use checkpointed iterations below
+to continue unfinished verification within an explicit deadline and segment limit; a
+genuine external blocker or exhausted budget must remain unsuccessful. A new head can
+start its own verification. The existing repair-commit limit still applies.
+
+The workflow must supply the missing evidence and publish a new current-head conclusion
+through its authorized review publisher, or push a justified fix for independent review.
+An old incomplete receipt is never turned into a pass merely because CI became green.
+Publishers must distinguish an explicitly superseded incomplete receipt from a duplicate
+publication so that verified follow-ups can update the conclusion without duplicate loops.
 
 The persisted state identity combines repository/PR, head/base, policy, trusted review and
 thread content, and failed workflow attempts. It is shared across review and CI sources

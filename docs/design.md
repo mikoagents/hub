@@ -157,6 +157,7 @@ missing app component.
 | `Combobox`                                                              | Pick one of many with search.                                                       |
 | `CopyField`, `CopyButton`, `CopyBlock`, `CodeBlock`                     | Show a value to copy, or a block of code.                                           |
 | `Disclosure`                                                            | Open and close a bordered section.                                                  |
+| `FlowDiagram`                                                           | Read a workflow diagram and expand it for inspection.                               |
 | `RowActions`                                                            | Put a record's actions behind one kebab.                                            |
 | `RelativeTime`                                                          | Show when. There is no absolute-date formatter in screens.                          |
 | `AuthLayout`, `AuthCard`, `AuthCardSkeleton`                            | Frame a pre-auth screen.                                                            |

@@ -1,3 +1,4 @@
+import { isolatedProcessEnvironment } from "../../test-utils/isolated-environment.js";
 import { parseCompiledHubConfig } from "../../config/compiler.js";
 import { spawn, execFile, type ChildProcess } from "node:child_process";
 import { createServer } from "node:net";
@@ -326,6 +327,93 @@ export class HubE2E {
         classifierPartial: classifier.prompt[0],
       },
     };
+  }
+
+  async runProgrammableTrigger(): Promise<{ status: string; agents: number; journal: string[] }> {
+    const daemon = await this.requirePool().query<{ slug: string }>(
+      "select slug from daemons where presence='connected' order by connected_at desc limit 1",
+    );
+    const slug = daemon.rows[0]?.slug;
+    if (!slug) throw new Error("Code Trigger requires the isolated source daemon");
+    const entry = join(this.root, "trigger.ts");
+    await writeFile(
+      entry,
+      `import {defineTrigger} from "@getpaseo/hub/triggers";
+      export default defineTrigger({name:"source-code",runner:"source",on:[{source:"manual",event:"run"}],
+        grants:{targets:{local:{daemon:${JSON.stringify(slug)},cwd:${JSON.stringify(this.workspace)},providers:["hub-e2e"]}}},
+        limits:{maxRuntime:"2m",maxAgentRuns:2}, async run(ctx){
+          const children=[];
+          for (let i=0;i<2;i++) {
+            const child=await ctx.agent.run("agent:"+i,{target:"local",agent:{provider:"hub-e2e",mode:"default"},maxRuntime:"1m",idleTimeout:"30s",prompt:"Deploy code-trigger for isolated-operator"});
+            children.push(child.runId);
+            if (i===0) await ctx.sleep("between-agents",100);
+          }
+          await ctx.log("Source daemon workflow completed",{children});
+          return {children};
+        }});`,
+    );
+    const cli = [join(HUB_ROOT, "bin/paseo-hub.js"), "trigger"];
+    const credential = ["--url", this.requireProxy().origin, "--token-file", this.machineKeyFile];
+    await runCommand(process.execPath, [...cli, "deploy", entry, ...credential], HUB_ROOT, {});
+    const runnerKey = join(this.root, "runner-credential");
+    await runCommand(
+      process.execPath,
+      [...cli, "runner-enroll", "source", ...credential, "--out", runnerKey],
+      HUB_ROOT,
+      {},
+    );
+    const runner = await startChild({
+      name: "trigger-runner",
+      command: process.execPath,
+      args: [
+        ...cli,
+        "runner",
+        "--url",
+        this.requireProxy().origin,
+        "--token-file",
+        runnerKey,
+        "--directory",
+        join(this.root, "runner-work"),
+      ],
+      cwd: HUB_ROOT,
+      root: this.root,
+      env: { NODE_ENV: "production" },
+    });
+    try {
+      await runCommand(
+        process.execPath,
+        [...cli, "run", "source-code", ...credential],
+        HUB_ROOT,
+        {},
+      );
+      await this.observe(async () => {
+        const result = await this.requirePool().query<{ status: string }>(
+          "select status from trigger_code_runs order by created_at desc limit 1",
+        );
+        const status = result.rows[0]?.status;
+        if (status === "failed" || status === "timed_out")
+          throw new Error("Source code Trigger failed");
+        return status === "succeeded";
+      }, "code Trigger to finish through the source-built daemon");
+      const journal = await this.requirePool().query<{
+        kind: string;
+        document: { childRunId: string | null };
+      }>(
+        "select document->>'kind' as kind,document from trigger_code_operations order by created_at",
+      );
+      const children = journal.rows
+        .filter((op) => op.kind === "agent")
+        .map((op) => op.document.childRunId);
+      if (new Set(children).size !== 2)
+        throw new Error("Code Trigger reused an agent operation identity");
+      return {
+        status: "succeeded",
+        agents: children.length,
+        journal: journal.rows.map((op) => op.kind),
+      };
+    } finally {
+      await stopChild(runner);
+    }
   }
 
   async createUnrelatedLocalAgent(): Promise<string> {
@@ -942,6 +1030,21 @@ export class HubE2E {
     return session;
   }
 
+  async sessionTranscript(executionId: string) {
+    let rows: { data: { seq: number; item: Record<string, unknown> } }[] = [];
+    await this.observe(async () => {
+      const result = await this.requirePool().query<{
+        data: { seq: number; item: Record<string, unknown> };
+      }>(
+        "select r.data from agent_session_timeline_rows r join agent_executions e on e.agent_session_id = r.session_id where e.id = $1 order by r.seq",
+        [executionId],
+      );
+      rows = result.rows;
+      return rows.some((row) => row.data.item["type"] === "user_message");
+    }, "session transcript synchronized through public Miko protocol");
+    return rows.map((row) => row.data);
+  }
+
   async sessionIsArchived(executionId: string): Promise<void> {
     await this.observe(async () => {
       const result = await this.requirePool().query<{ done: boolean }>(
@@ -1406,6 +1509,7 @@ export class HubE2E {
         PORT: String(this.hubPort),
         HUB_E2E_MACHINE_KEY_FILE: this.machineKeyFile,
         PASEO_HUB_APP_URL: this.requireProxy().origin,
+        PASEO_HUB_DATA_DIR: join(this.root, "hub-data"),
         PASEO_HUB_AUTH_SECRET: "hub-e2e-browser-auth-secret-at-least-32-characters",
         PASEO_REGISTRATION_MODE: "open",
         PASEO_ORGANIZATION_CREATION: "open",
@@ -1736,7 +1840,7 @@ async function startChild(input: {
   const output: string[] = [];
   const child = spawn(input.command, input.args, {
     cwd: input.cwd,
-    env: { ...process.env, ...input.env },
+    env: isolatedProcessEnvironment(input.env),
     stdio: ["ignore", "pipe", "pipe"],
   });
   const record = (chunk: Buffer) => {

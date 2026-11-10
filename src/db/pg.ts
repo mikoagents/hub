@@ -1,3 +1,5 @@
+import { PgTriggerCodeRepository } from "../triggers/code/repository.js";
+import { PgSessionTimelineStore } from "../session-timelines/store.js";
 import { ExecutionAuthorityRepository } from "../execution-authority/index.js";
 import { ScheduleRepository } from "../triggers/schedule/index.js";
 import { acceptWorkflowRun } from "./workflow-intake.js";
@@ -140,6 +142,8 @@ export function createDatabase(runtime: DatabaseRuntime, locks: Locks): Database
 }
 
 class PgDatabase implements Database {
+  readonly triggerCode;
+  readonly sessionTimelines;
   readonly schedules;
   readonly executionAuthority;
   private readonly connections;
@@ -149,6 +153,8 @@ class PgDatabase implements Database {
     private readonly pool: DatabaseRuntime,
     private readonly locks: Locks,
   ) {
+    this.triggerCode = new PgTriggerCodeRepository(this.pool, this.locks);
+    this.sessionTimelines = new PgSessionTimelineStore(this.pool);
     this.schedules = new ScheduleRepository(this.pool);
     this.executionAuthority = new ExecutionAuthorityRepository(this.pool);
     this.connections = new ConnectionRepository(this.pool, locks);
@@ -3153,6 +3159,27 @@ class PgDatabase implements Database {
     return rows.rows.map(toOrganizationTriggerRecord);
   }
 
+  async listOrganizationTriggerRevisions(organizationId: string, triggerId: string) {
+    const rows = await query<{
+      id: string;
+      version: number;
+      content_hash: string;
+      source_kind: "manual" | "github" | "project_migration";
+      created_at: Date;
+    }>(
+      this.pool,
+      "select id,version,content_hash,source_kind,created_at from organization_trigger_revisions where organization_id=$1 and trigger_id=$2 order by version desc limit 200",
+      [organizationId, triggerId],
+    );
+    return rows.rows.map((row) => ({
+      id: row.id,
+      version: row.version,
+      contentHash: row.content_hash,
+      sourceKind: row.source_kind,
+      createdAt: row.created_at,
+    }));
+  }
+
   async findOrganizationTriggerRevision(
     triggerId: string,
     revisionId: string,
@@ -3223,6 +3250,30 @@ class PgDatabase implements Database {
         if (updated.rows[0] === undefined) throw new Error("organization trigger not found");
         trigger = updated.rows[0];
       }
+      // Historical multi-step identities can predate the runtime adapter. A
+      // deliberate rewrite retains their Trigger identity and creates the adapter.
+      if (trigger.runtime_project_id === null) {
+        const project = await client.query<ProjectRow>(
+          `insert into projects (organization_id,name,slug,created_by_user_id)
+           values ($1,$2,$3,$4) returning *`,
+          [
+            input.organizationId,
+            `Trigger runtime: ${input.name}`,
+            `trigger-${randomUUID().replaceAll("-", "")}`,
+            input.createdByUserId,
+          ],
+        );
+        await client.query(
+          `insert into project_configuration_sources (project_id,organization_id,kind,automatic_deployment_enabled,selected_by_user_id)
+           values ($1,$2,'manual',false,$3)`,
+          [project.rows[0]!.id, input.organizationId, input.createdByUserId],
+        );
+        const attached = await client.query<OrganizationTriggerRow>(
+          "update organization_triggers set runtime_project_id=$2 where id=$1 returning *",
+          [trigger.id, project.rows[0]!.id],
+        );
+        trigger = attached.rows[0]!;
+      }
       const revisionRows = await client.query<OrganizationTriggerRevisionRow>(
         `insert into organization_trigger_revisions (
            trigger_id, organization_id, version, yaml, normalized_configuration,
@@ -3278,7 +3329,11 @@ class PgDatabase implements Database {
           trigger.runtime_project_id,
           input.organizationId,
           input.sourceKind,
-          { kind: "organization_trigger_adapter", triggerId: trigger.id },
+          {
+            kind: "organization_trigger_adapter",
+            triggerId: trigger.id,
+            ...(input.format === "code" ? { triggerRevisionId: revision.id } : {}),
+          },
           input.yaml,
           input.normalizedConfiguration,
           input.contentHash,
@@ -4207,6 +4262,7 @@ class PgDatabase implements Database {
          on triggers.runtime_project_id = runs.project_id
         and triggers.organization_id = runs.organization_id
        where runs.organization_id = $1 and runs.created_at >= $2
+         and coalesce(runs.trigger_context->>'provider','') <> 'trigger_code'
        order by runs.created_at desc, runs.id desc
        limit $3`,
       [organizationId, since, limit],

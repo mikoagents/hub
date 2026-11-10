@@ -1,3 +1,6 @@
+import { MemoryTriggerCodeRepository } from "../triggers/code/repository.js";
+import { holdsProviderSubscription, storedSubscriptions } from "../triggers/code/routing.js";
+import { MemorySessionTimelineStore } from "../session-timelines/store.js";
 import { randomUUID } from "node:crypto";
 import type { AgentExecutionStatus, MachineStatus } from "./schema.js";
 import { parseCompiledHubConfig, type JsonValue } from "../config/compiler.js";
@@ -159,6 +162,8 @@ export function createMemoryDatabase(options: MemoryDatabaseOptions = {}): Datab
 }
 
 class MemoryDatabase implements Database {
+  readonly triggerCode = new MemoryTriggerCodeRepository();
+  readonly sessionTimelines = new MemorySessionTimelineStore();
   // This test double has no background work. Scheduling tests use the actual embedded/PG runtime.
   get schedules(): import("../triggers/schedule/index.js").ScheduleStore {
     return (
@@ -2668,6 +2673,23 @@ class MemoryDatabase implements Database {
     );
   }
 
+  async listOrganizationTriggerRevisions(organizationId: string, triggerId: string) {
+    return [...this.organizationTriggerRevisions.values()]
+      .filter(
+        (revision) =>
+          revision.organizationId === organizationId && revision.triggerId === triggerId,
+      )
+      .sort((a, b) => b.version - a.version)
+      .slice(0, 200)
+      .map(({ id, version, contentHash, sourceKind, createdAt }) => ({
+        id,
+        version,
+        contentHash,
+        sourceKind,
+        createdAt,
+      }));
+  }
+
   async findOrganizationTriggerRevision(
     triggerId: string,
     revisionId: string,
@@ -2752,7 +2774,11 @@ class MemoryDatabase implements Database {
     const runtimeRevision = await this.insertProjectConfigurationRevision({
       projectId: runtimeProjectId,
       sourceKind: input.sourceKind,
-      sourceEvidence: { kind: "organization_trigger_adapter", triggerId },
+      sourceEvidence: {
+        kind: "organization_trigger_adapter",
+        triggerId,
+        ...(input.format === "code" ? { triggerRevisionId: revision.id } : {}),
+      },
       rawYaml: input.yaml,
       normalizedConfiguration: input.normalizedConfiguration,
       contentHash: input.contentHash,
@@ -3235,7 +3261,12 @@ class MemoryDatabase implements Database {
     limit: number,
   ): Promise<OrganizationRunRecord[]> {
     return [...this.triggerRuns.values()]
-      .filter((run) => run.organizationId === organizationId && run.createdAt >= since)
+      .filter(
+        (run) =>
+          run.organizationId === organizationId &&
+          run.createdAt >= since &&
+          !isCodeChild(run.triggerContext),
+      )
       .sort(
         (left, right) =>
           right.createdAt.getTime() - left.createdAt.getTime() || right.id.localeCompare(left.id),
@@ -3498,6 +3529,36 @@ class MemoryDatabase implements Database {
           : [];
       },
     );
+    const connection = (await this.organizationConnectionUsage(organizationId))[provider].find(
+      (item) => item.id === connectionId,
+    );
+    if (connection !== undefined) {
+      const resource =
+        provider === "github" ? (input.repo ?? undefined) : (resourceId ?? undefined);
+      for (const trigger of await this.listOrganizationTriggers(organizationId)) {
+        const revisions = await this.triggerCode.transaction(organizationId, (tx) =>
+          tx.activeRevisions(trigger.id),
+        );
+        for (const revisionId of revisions) {
+          const revision = await this.findOrganizationTriggerRevision(trigger.id, revisionId);
+          if (
+            holdsProviderSubscription(
+              storedSubscriptions(revision?.sourceEvidence),
+              provider,
+              connection.slug,
+              resource,
+            )
+          )
+            routes.push({
+              projectId: trigger.runtimeProjectId,
+              provider,
+              connectionId,
+              resourceId,
+              triggerName: trigger.name,
+            });
+        }
+      }
+    }
     if (routes.length === 0) {
       this.providerEventReceipts.set(receipt.id, {
         ...receipt,
@@ -3737,4 +3798,13 @@ function attachmentSourceKey(
   sourceId: string,
 ): string {
   return `${providerEventReceiptId}:${provider}:${sourceId}`;
+}
+
+function isCodeChild(context: unknown): boolean {
+  return (
+    typeof context === "object" &&
+    context !== null &&
+    "provider" in context &&
+    context.provider === "trigger_code"
+  );
 }

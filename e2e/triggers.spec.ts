@@ -1,247 +1,331 @@
 import { expect } from "@playwright/test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "./app.js";
 import { OrganizationTriggers } from "./helpers/triggers.js";
+import { artifactDigest } from "../src/triggers/code/contract.js";
+import { executeTriggerJob } from "../src/triggers/code/runner.js";
+import type { TriggerJob } from "../src/triggers/code/service.js";
 
-const SHOTS = "e2e/screenshots/triggers";
 const owner = {
   name: "Trigger Owner",
   email: "trigger-owner@example.com",
-  password: "trigger-owner-password",
+  password: "trigger-owner-test-password",
 };
 
-test("requires daemon setup before trigger configuration", async ({ hub, page }) => {
-  await hub.signUpAs("owner", owner);
-  await hub.createOrganization("owner", "Acme");
-  const triggers = new OrganizationTriggers(page);
-
-  await triggers.open();
-  await expect(page.getByRole("alert")).toContainText("Add a daemon first");
-  await expect(page.getByRole("link", { name: "Go to Daemons" })).toHaveAttribute(
-    "href",
-    /\/o\/[^/]+\/daemons$/u,
-  );
-  await page.screenshot({ path: `${SHOTS}/00-no-daemon-callout.png`, fullPage: true });
-  await triggers.startNew();
-  await triggers.expectWaitingForDaemon();
-  await triggers.exploreEventQualifiers();
-  await expect(
-    page.getByText("No daemon is connected to this organization yet", { exact: false }),
-  ).toBeVisible();
-  await expect(page.getByRole("combobox", { name: "Run on daemon" })).toBeHidden();
-  await expect(page.getByText("Choose a daemon first", { exact: false })).toBeVisible();
-  await page.screenshot({ path: `${SHOTS}/00-no-daemons.png`, fullPage: true });
-  await page.getByRole("link", { name: "Go to Daemons" }).click();
-  await expect(page).toHaveURL(/\/daemons$/u);
-  await expect(page.getByRole("heading", { name: "Daemons", level: 1 })).toBeVisible();
-});
-
-test("creates a trigger visually, preserves advanced YAML through the form, and explains legacy workflows", async ({
+test("creates code projects without requiring a daemon for non-agent workflows", async ({
   hub,
   page,
 }) => {
   await hub.signUpAs("owner", owner);
-  await hub.createOrganization("owner", "Acme");
-  const daemon = await hub.connectProviderDaemon("owner", "Acme");
-  await hub.seedSlackConnection("owner", "company-slack", "Acme Slack");
+  await hub.createOrganization("owner", "Code projects");
   const triggers = new OrganizationTriggers(page);
-
-  await test.step("the flat organization trigger list is the starting point", async () => {
-    await triggers.open();
-    await triggers.expectEmpty();
-    await triggers.capture(`${SHOTS}/01-empty-trigger-list.png`);
-  });
-
-  await test.step("the common setup stays in one small form", async () => {
-    await triggers.startNew();
-    await triggers.expectDaemonPreselected(daemon);
-    await expect(page.getByLabel("Execution backend", { exact: true })).toHaveCount(0);
-    await page.screenshot({ path: `${SHOTS}/01b-daemon-required.png`, fullPage: true });
-    await triggers.expectRefusedOnSubmit("Working directory is required.");
-    await triggers.configureSlackMention({
-      name: "slack-help",
-      connection: "company-slack",
-      daemon,
-      cwd: "/workspace/acme",
-      users: "U123, U456",
-      agent: "opencode/gateway/vendor/model-v1",
-      mode: "full-access",
-      thinking: "high",
-      providerOptions: '{"sandbox_mode":"workspace-write"}',
-      prompt: "Handle the Slack request.",
-    });
-    await triggers.exerciseContinuity();
-    await triggers.expectMergeTagsAndAutosizing();
-    await triggers.expectAgentSearch();
-    await triggers.expectComboboxes();
-    await triggers.changePrompt("Handle the Slack request.");
-    await triggers.expectDisclosureRailsAtPhoneWidth();
-    await page.evaluate(() => window.scrollTo({ top: 0 }));
-    await triggers.capture(`${SHOTS}/02-configured-form.png`);
-    await triggers.captureInstructions(`${SHOTS}/02b-agent-instructions.png`);
-    await triggers.captureExpandedAgent(`${SHOTS}/02c-expanded-model-combobox.png`);
-  });
-
-  await test.step("YAML mirrors the form and remains the canonical editable document", async () => {
-    await triggers.switchToYaml();
-    await page.waitForFunction(() => window.scrollY === 0);
-    await triggers.expectYamlContains(
-      "provider: opencode",
-      "model: gateway/vendor/model-v1",
-      "mode: full-access",
-      "sandbox_mode: workspace-write",
-      "mode: conversation",
-    );
-    await triggers.capture(`${SHOTS}/03-generated-yaml.png`);
-  });
-
-  await test.step("a mode the daemon does not offer is refused at save, not at the first run", async () => {
-    // `Invalid mode 'default' for provider 'opencode'. Available modes: build, plan` was a
-    // production run failure. The daemon's catalog answers before anything is stored.
-    await triggers.replaceYaml(
-      advancedTriggerYaml(daemon).replace("mode: full-access", "mode: default"),
-    );
-    await triggers.expectRefusedOnSubmit(
-      "run.agent.mode: Mode 'default' is not available for provider 'opencode'",
-    );
-    await triggers.replaceYaml(
-      advancedTriggerYaml(daemon).replace("provider: opencode", "provider: omp"),
-    );
-    await triggers.expectRefusedOnSubmit("Provider 'omp' is unavailable");
-    await triggers.capture(`${SHOTS}/03b-refused-mode.png`);
-  });
-
-  await test.step("valid YAML saves and lists", async () => {
-    await triggers.replaceYaml(advancedTriggerYaml(daemon));
-    await triggers.save("slack-help");
-    await triggers.expectOperationalList("slack-help");
-    await triggers.capture(`${SHOTS}/04-saved-trigger-list.png`);
-  });
-
-  await test.step("the form projects advanced YAML without hiding or deleting it", async () => {
-    await triggers.openTrigger("slack-help");
-    await expect(page.getByLabel("Execution backend", { exact: true })).toHaveCount(0);
-    await triggers.expectFormAgent({
-      agent: "opencode/gateway/vendor/model-v1",
-      mode: "full-access",
-      providerOptions: '{\n  "sandbox_mode": "workspace-write",\n  "approval_policy": "never"\n}',
-      prompt: "Handle the Slack request.",
-    });
-    await triggers.capture(`${SHOTS}/05-round-tripped-form.png`);
-    await triggers.changePrompt("Handle the Slack request and report what changed.");
-    await triggers.save("slack-help");
-  });
-
-  await test.step("a form save retains comments and every YAML-only field", async () => {
-    await triggers.openTrigger("slack-help");
-    await triggers.switchToYaml();
-    await triggers.expectYamlContains(
-      "# survives form edits",
-      "thinkingOptionId: high",
-      "newBranch: trigger-work",
-      "channels:",
-      "slack.reply:",
-      "auto_archive: false",
-      "Handle the Slack request and report what changed.",
-    );
-    await triggers.capture(`${SHOTS}/06-preserved-advanced-yaml.png`);
-    await page.getByRole("button", { name: "Triggers" }).click();
-  });
-
-  await test.step("legacy multi-step workflows remain visible and are never silently flattened", async () => {
-    await hub.seedLegacyTrigger("owner", "legacy-review", legacyWorkflowYaml);
-    await triggers.open();
-    await triggers.openTrigger("legacy-review");
-    await triggers.expectLegacyReadOnly();
-    await triggers.capture(`${SHOTS}/07-legacy-workflow-warning.png`);
-  });
+  await triggers.open();
+  await expect(page.getByText("No triggers", { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "New trigger" }).click();
+  await expect(page.getByRole("heading", { name: "New trigger", exact: true })).toBeVisible();
+  await expect(page.getByText("paseo-hub trigger init my-trigger", { exact: false })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save trigger" })).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Trigger YAML" })).toHaveCount(0);
+  await page.getByRole("button", { name: "See the starter script" }).click();
+  await expect(page.getByRole("textbox", { name: "trigger.ts value" })).toContainText(
+    'name: "my-trigger"',
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(
+    page.getByRole("button", { name: "Copy commands", exact: true }).first(),
+  ).toBeVisible();
+  await expect(page.locator("body")).toHaveJSProperty("scrollWidth", 390);
 });
 
-for (const scenario of [
-  { event: "github.issue_label_added", name: "issue-label" },
-  { event: "github.pull_request_label_added", name: "pr-label" },
-]) {
-  test(`saves, reloads, and requires a label for ${scenario.event}`, async ({ hub, page }) => {
-    await hub.signUpAs("owner", owner);
-    await hub.createOrganization("owner", "Acme");
-    const daemon = await hub.connectProviderDaemon("owner", "Acme");
-    await hub.connectGitHub("owner");
-    const triggers = new OrganizationTriggers(page);
+test("deploys code, runs a real worker, shows Activity results and retains identity on redeploy", async ({
+  hub,
+  page,
+  request,
+}) => {
+  await hub.signUpAs("owner", owner);
+  await hub.createOrganization("owner", "Code workflows");
+  const deployed = await hub.deployCodeTrigger("owner", artifact("first"));
+  const triggers = new OrganizationTriggers(page);
+  await triggers.open();
+  await page.getByRole("link", { name: "code-workflow", exact: true }).click();
+  await expect(page.getByRole("img", { name: "Workflow for code-workflow" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Source code", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Source code" })).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: "Code revision" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "trigger.ts value" })).toHaveCount(0);
+  const triggerFile = page.getByRole("button", { name: "trigger.ts Entrypoint", exact: true });
+  const policyFile = page.getByRole("button", { name: "policy.ts", exact: true });
+  await expect(triggerFile).toHaveAttribute("aria-expanded", "false");
+  await expect(policyFile).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("combobox", { name: "Source file" })).toHaveCount(0);
+  await triggerFile.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("return result;", { exact: false })).toBeVisible();
+  await policyFile.click();
+  await expect(page.getByRole("textbox", { name: "policy.ts value" })).toContainText(
+    'version = "first"',
+  );
+  await expect(page.getByRole("textbox", { name: "trigger.ts value" })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator("body")).toHaveJSProperty("scrollWidth", 390);
+  await triggerFile.focus();
+  await page.keyboard.press("Space");
+  await expect(page.getByRole("textbox", { name: "trigger.ts value" })).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "policy.ts value" })).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await expect(page.getByRole("button", { name: "Run now" })).toBeEnabled();
+  await page.getByRole("button", { name: "Run now" }).click();
+  await expect(page.getByText("Run queued", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("table", { name: "Run history" }).getByRole("row").filter({ hasText: "Queued" }),
+  ).toHaveCount(1);
 
-    await test.step("reject an otherwise complete form with an empty or blank label", async () => {
-      await triggers.open();
-      await triggers.startNew();
-      await triggers.configureLabelAdded({ ...scenario, daemon });
-      await triggers.expectLabelRequiredOnSubmit();
-      await triggers.changeAddedLabel("   ");
-      await triggers.expectLabelRequiredOnSubmit();
-      await triggers.capture(`${SHOTS}/${scenario.name}-required.png`);
-    });
-
-    await test.step("save through the form and verify persisted YAML after reload", async () => {
-      await triggers.changeAddedLabel("ready-for-review");
-      await triggers.save(scenario.name);
-      await triggers.openTrigger(scenario.name);
-      await triggers.expectPersistedLabel(scenario.event, "ready-for-review");
-    });
-
-    await test.step("reject clearing a saved label without changing the saved trigger", async () => {
-      await triggers.changeAddedLabel("");
-      await triggers.expectLabelRequiredOnSubmit();
-      await triggers.expectPersistedLabel(scenario.event, "ready-for-review");
-    });
-
-    await test.step("edit the label and verify the new value survives another reload", async () => {
-      await triggers.changeAddedLabel("ready-to-ship");
-      await triggers.save(scenario.name);
-      await triggers.openTrigger(scenario.name);
-      await triggers.expectPersistedLabel(scenario.event, "ready-to-ship");
-      await triggers.capture(`${SHOTS}/${scenario.name}-persisted.png`);
-    });
+  const operator = await hub.codeTriggerCredential("owner");
+  const url = hub.primaryApplication().origin;
+  const enrollment = await request.post(`${url}/api/v1/triggers/runners`, {
+    headers: { authorization: `Bearer ${operator}` },
+    data: { name: "browser" },
   });
+  expect(enrollment.status()).toBe(201);
+  const runner = (await enrollment.json()) as { token: string };
+  const lease = await request.post(`${url}/api/v1/triggers/runner/lease`, {
+    headers: { authorization: `Bearer ${runner.token}` },
+    data: {},
+  });
+  const { job } = (await lease.json()) as { job: TriggerJob };
+  expect(job.run.triggerId).toBe(deployed.triggerId);
+  const directory = await mkdtemp(join(tmpdir(), "hub-browser-runner-"));
+  try {
+    await executeTriggerJob(job, { url, token: runner.token, directory });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+
+  const history = page.getByRole("table", { name: "Run history" });
+  await expect(history.getByRole("row").filter({ hasText: "Succeeded" })).toHaveCount(1);
+  await history.getByRole("button", { name: /^Open run from / }).click();
+  await expect(page.getByRole("radio", { name: "Run details", exact: true })).toBeChecked();
+  await expect(page.getByRole("textbox", { name: "Trigger result", exact: true })).toContainText(
+    '"version": "first"',
+  );
+  await expect(page.getByRole("textbox", { name: "process result", exact: true })).toBeHidden();
+  await page.getByRole("button", { name: /^process\b/ }).click();
+  await expect(page.getByRole("textbox", { name: "process result", exact: true })).toContainText(
+    '"version": "first"',
+  );
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+
+  await page.getByRole("link", { name: "Activity", exact: true }).click();
+  const row = page.getByRole("row").filter({ hasText: "code-workflow" });
+  await expect(row).toContainText("Succeeded");
+  await row.getByRole("button", { name: "code-workflow", exact: true }).click();
+  await page.getByRole("radio", { name: "Run details", exact: true }).click();
+  await expect(page.getByText('"version": "first"', { exact: false }).first()).toBeVisible();
+  await page.getByRole("radio", { name: "Diagnostics", exact: true }).click();
+  await expect(page.getByText("Processed code workflow", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+
+  const updated = await hub.deployCodeTrigger("owner", artifact("second"));
+  expect(updated.triggerId).toBe(deployed.triggerId);
+  expect(updated.version).toBe(2);
+  await triggers.open();
+  await page.getByRole("link", { name: "code-workflow", exact: true }).click();
+  await policyFile.click();
+  await expect(page.getByText('"second"', { exact: false })).toBeVisible();
+  await page.getByRole("combobox", { name: "Code revision" }).click();
+  await page.getByRole("option", { name: /Revision 1/ }).click();
+  await expect(policyFile).toHaveAttribute("aria-expanded", "false");
+  await policyFile.click();
+  await expect(page.getByText('"first"', { exact: false })).toBeVisible();
+  await expect(
+    page.getByText("This is an older revision. Run now uses the current revision, 2."),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Run now", exact: true })).toBeEnabled();
+  await page.getByRole("combobox", { name: "Code revision" }).click();
+  await page.getByRole("option", { name: /Revision 2/ }).click();
+  await policyFile.click();
+  await expect(page.getByText('"second"', { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Disable", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Enable", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Run now" })).toBeDisabled();
+});
+
+test("shows authored branches and loops in an expandable diagram in both palettes and on a phone", async ({
+  hub,
+  page,
+}) => {
+  await hub.signUpAs("owner", owner);
+  await hub.createOrganization("owner", "Workflow diagrams");
+  await hub.deployCodeTrigger(
+    "owner",
+    diagramArtifact(
+      "review-flow",
+      `flowchart LR
+    event([Incoming event]) --> review[Review]
+    review --> ready{Ready?}
+    ready -->|No| repair[Repair]
+    repair --> review
+    ready -->|Yes| done[Publish result]`,
+    ),
+  );
+  const triggers = new OrganizationTriggers(page);
+  await triggers.open();
+  await page.getByRole("link", { name: "review-flow", exact: true }).click();
+  const graph = page.getByRole("img", { name: "Workflow for review-flow" });
+  await expect(graph).toContainText("Repair");
+  await expect(graph.locator("svg.pele-flowchart")).toHaveCount(1);
+  await page.getByRole("button", { name: "Expand diagram", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Workflow diagram" });
+  await expect(dialog.getByRole("img", { name: "Workflow for review-flow" })).toContainText(
+    "Publish result",
+  );
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  const color = await graph
+    .locator(".pele-node rect")
+    .first()
+    .evaluate((node) => getComputedStyle(node).fill);
+  await page.getByRole("button", { name: "Appearance", exact: true }).click();
+  await page.getByRole("radio", { name: "Dark", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await expect
+    .poll(() =>
+      graph
+        .locator(".pele-node rect")
+        .first()
+        .evaluate((node) => getComputedStyle(node).fill),
+    )
+    .not.toBe(color);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(graph).toBeVisible();
+  await expect
+    .poll(() =>
+      graph
+        .locator(".pele-node rect")
+        .first()
+        .evaluate((node) => node.getBoundingClientRect().height),
+    )
+    .toBeGreaterThan(24);
+  await expect(page.locator("body")).toHaveJSProperty("scrollWidth", 390);
+  await page.getByRole("button", { name: "Expand diagram", exact: true }).click();
+  await expect(dialog.getByRole("img", { name: "Workflow for review-flow" })).toBeVisible();
+  await expect(page.locator("body")).toHaveJSProperty("scrollWidth", 390);
+});
+
+test("renders Pele mindmaps with readable mobile labels and an expanded view", async ({
+  hub,
+  page,
+}) => {
+  await hub.signUpAs("owner", owner);
+  await hub.createOrganization("owner", "Mindmap diagrams");
+  await hub.deployCodeTrigger(
+    "owner",
+    diagramArtifact(
+      "review-map",
+      `mindmap
+  root((Review workflow))
+    When
+      Pull request opened
+      CI completed
+    Review
+      Check the latest head
+      Repair findings
+    Result
+      Publish formal review`,
+    ),
+  );
+  const triggers = new OrganizationTriggers(page);
+  await triggers.open();
+  await page.getByRole("link", { name: "review-map", exact: true }).click();
+  const graph = page.getByRole("img", { name: "Workflow for review-map" });
+  await expect(graph.locator("svg.pele-mindmap")).toHaveCount(1);
+  await expect(graph).toContainText("Publish formal review");
+  const color = await graph
+    .locator(".pele-root circle")
+    .evaluate((node) => getComputedStyle(node).fill);
+  await page.getByRole("button", { name: "Appearance", exact: true }).click();
+  await page.getByRole("radio", { name: "Dark", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await expect
+    .poll(() => graph.locator(".pele-root circle").evaluate((node) => getComputedStyle(node).fill))
+    .not.toBe(color);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(graph).toBeVisible();
+  await expect(graph.locator(".pele-root .pele-label")).toHaveCSS("font-size", "13px");
+  await expect(page.locator("body")).toHaveJSProperty("scrollWidth", 390);
+  await graph.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => graph.evaluate((node) => node.scrollLeft)).toBeGreaterThan(0);
+  await page.getByRole("button", { name: "Expand diagram", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Workflow diagram" });
+  await expect(dialog.locator("svg.pele-mindmap")).toHaveCount(1);
+  await expect(dialog).toContainText("Repair findings");
+  await expect(page.locator("body")).toHaveJSProperty("scrollWidth", 390);
+});
+
+test("keeps malformed diagrams and embedded HTML from taking over the Trigger page", async ({
+  hub,
+  page,
+}) => {
+  await hub.signUpAs("owner", owner);
+  await hub.createOrganization("owner", "Diagram failures");
+  await hub.deployCodeTrigger(
+    "owner",
+    diagramArtifact(
+      "safe-diagram",
+      `flowchart LR
+    A["<img src=x onerror=alert(1)>"] --> B[Done]
+    click A "javascript:alert(1)"
+    click B "https://example.com"
+    B --> C@{ img: "https://example.com/diagram.png", label: "External image" }`,
+    ),
+  );
+  await hub.deployCodeTrigger(
+    "owner",
+    diagramArtifact("broken-diagram", "flowchart LR\n A[unfinished"),
+  );
+  const triggers = new OrganizationTriggers(page);
+  await triggers.open();
+  await page.getByRole("link", { name: "safe-diagram", exact: true }).click();
+  const graph = page.getByRole("img", { name: "Workflow for safe-diagram" });
+  await expect(graph.locator("svg")).toHaveCount(1);
+  await expect(
+    graph.locator("script, img, image, foreignObject, a[href], a[*|href], [onerror], [onload]"),
+  ).toHaveCount(0);
+  await triggers.open();
+  await page.getByRole("link", { name: "broken-diagram", exact: true }).click();
+  await expect(page.getByText("Diagram unavailable", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Run now", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "trigger.ts Entrypoint", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "trigger.ts value" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Run history", exact: true })).toBeVisible();
+});
+
+function diagramArtifact(name: string, diagram: string) {
+  const { digest: _digest, ...body } = artifact("diagram");
+  const updated = { ...body, manifest: { ...body.manifest, name, diagram } };
+  return { ...updated, digest: artifactDigest(updated) };
 }
 
-function advancedTriggerYaml(daemon: string) {
-  return `# survives form edits
-name: slack-help
-enabled: true
-on:
-  slack.mention:
-    connection: company-slack
-    filters:
-      from_users: [U123, U456]
-      channels: [engineering]
-run:
-  target:
-    daemon: ${daemon}
-    cwd: /workspace/acme
-    worktree:
-      mode: branch-off
-      newBranch: trigger-work
-  agent:
-    provider: opencode
-    model: gateway/vendor/model-v1
-    mode: full-access
-    thinkingOptionId: high
-    options:
-      sandbox_mode: workspace-write
-      approval_policy: never
-  prompt: Handle the Slack request.
-  max_runtime: 90m
-  idle_timeout: 15m
-  outputs:
-    slack.reply:
-      max: 5
-  auto_archive: false
-`;
+function artifact(version: string) {
+  const code = `export default {async run(ctx) { const result = await ctx.step("process", null, async () => ({version:${JSON.stringify(version)}})); await ctx.log("Processed code workflow", result); return result; }};`;
+  const body = {
+    format: "trigger-code-v1" as const,
+    manifest: {
+      name: "code-workflow",
+      runner: "browser",
+      description: "A code-defined workflow",
+      on: [{ source: "manual", event: "run" }],
+      grants: {},
+      limits: { maxRuntime: "10m" },
+    },
+    code,
+    entrypoint: "trigger.ts",
+    sources: [
+      { path: "policy.ts", content: `export const version = ${JSON.stringify(version)};` },
+      { path: "trigger.ts", content: code },
+    ],
+  };
+  return { ...body, digest: artifactDigest(body) };
 }
-
-const legacyWorkflowYaml = `name: legacy-review
-on: slack.mention
-steps:
-  - id: classify
-    agent: classifier
-    prompt: Classify the request.
-  - id: implement
-    agent: engineer
-    prompt: Implement it.
-`;

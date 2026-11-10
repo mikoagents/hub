@@ -340,6 +340,9 @@ async function runTwoStepWorkflow<
   });
   const connection: DaemonConnection = {
     agents: {
+      timeline: async () => {
+        throw new Error("not used");
+      },
       create: async (key) => {
         if (options.outcome === "prelaunch_failure") throw new Error("daemon rejected agent");
         return {

@@ -1,3 +1,4 @@
+import { SessionTimelines } from "../session-timelines/service.js";
 import { DaemonAgentError } from "./agents/index.js";
 import { executionLogEvent } from "./execution-log.js";
 import { AgentSessions, AgentSessionError } from "../agent-sessions/index.js";
@@ -151,6 +152,8 @@ export class AgentExecutionOutputValidationFailure extends Error {
 }
 
 export class DaemonDispatchLifecycle {
+  private readonly timelineSyncs = new Map<string, Promise<void>>();
+  private readonly sessionTimelines: SessionTimelines;
   private readonly providersByName: Map<string, TriggerProvider>;
   private readonly executionCapabilities: OutputExecutorRegistry;
   private readonly startedExecutions = new Set<string>();
@@ -163,6 +166,11 @@ export class DaemonDispatchLifecycle {
   private stopping = false;
 
   constructor(private readonly options: DaemonDispatchLifecycleOptions) {
+    this.sessionTimelines = new SessionTimelines(
+      options.database,
+      (id) => options.connectionForDaemon(id),
+      options.completionTokenSecret,
+    );
     this.executionCapabilities = options.executionCapabilities ?? new OutputExecutorRegistry();
     this.providersByName = new Map(
       (options.providers ?? []).map((provider) => [provider.name, provider]),
@@ -181,6 +189,7 @@ export class DaemonDispatchLifecycle {
     this.deadlineTimersByExecution.clear();
     this.startedExecutions.clear();
     await Promise.allSettled([
+      ...this.timelineSyncs.values(),
       ...this.daemonRecoveries,
       ...this.reconcilingHubActions.values(),
       ...this.pendingStreamHandlersByExecution.values(),
@@ -951,6 +960,17 @@ export class DaemonDispatchLifecycle {
     await this.recoverPendingHubActions();
   }
 
+  /** Code Trigger cancellation uses the same durable stop and credential cleanup as failures. */
+  async cancelAgentExecutions(executionIds: readonly string[], reason: string): Promise<void> {
+    for (const executionId of executionIds) {
+      const execution = await this.options.database.findAgentExecutionById(executionId);
+      if (!execution) continue;
+      if (isTerminalExecutionStatus(execution.status))
+        await this.reconcileHubActionSafely(execution);
+      else await this.failAgentExecution(executionId, reason, { notifyProvider: false });
+    }
+  }
+
   recoverDaemon(daemon: DaemonRecord): Promise<void> {
     if (this.stopping) return Promise.resolve();
     const recovery = Promise.all([
@@ -1660,6 +1680,25 @@ export class DaemonDispatchLifecycle {
     event: DaemonEvent,
     source: "live" | "snapshot",
   ): Promise<void> {
+    if (
+      source === "snapshot" ||
+      (event.type === "agent_stream" &&
+        ["turn_completed", "turn_failed", "turn_canceled"].includes(event.event.type))
+    ) {
+      const previous = this.timelineSyncs.get(executionId) ?? Promise.resolve();
+      const sync = previous
+        .then(async () => {
+          const execution = await this.options.database.findAgentExecutionById(executionId);
+          if (execution?.agentSessionId) await this.sessionTimelines.sync(execution.agentSessionId);
+          return undefined;
+        })
+        .catch((error: unknown) => this.report(error, "daemon.session.timeline", { executionId }))
+        .finally(() => {
+          if (this.timelineSyncs.get(executionId) === sync) this.timelineSyncs.delete(executionId);
+        });
+      this.timelineSyncs.set(executionId, sync);
+    }
+
     if (source !== "live") return;
     try {
       const execution = await this.options.database.findAgentExecutionById(executionId);

@@ -13,6 +13,9 @@ export class ScheduleTestDaemon implements DaemonConnection {
     status: "running",
   };
   readonly agents: AgentConnection = {
+    timeline: async () => {
+      throw new Error("not used");
+    },
     create: async (_key, options) => {
       this.launches.push(options);
       return this.agent;

@@ -1,4 +1,8 @@
-import { fixtureRequest, fixtureResponse, handleFixtureReceipt } from "./execution-fixture.js";
+import {
+  fixtureRequest,
+  fixtureResponse,
+  handleFixtureAuxiliaryRequest,
+} from "./execution-fixture.js";
 import { randomUUID } from "node:crypto";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
 import { z } from "zod";
@@ -405,7 +409,7 @@ class RegistrySocket {
     });
     socket.on("message", (data) => {
       const value = JSON.parse(readText(data)) as unknown;
-      if (handleFixtureReceipt(value, (frame) => this.socket.send(frame))) return;
+      if (handleFixtureAuxiliaryRequest(value, (frame) => this.socket.send(frame))) return;
       if (isHubHello(value)) {
         if (this.helloPermissions) this.sendServerInfo(this.helloPermissions);
         return;

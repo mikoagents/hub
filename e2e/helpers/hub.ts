@@ -1,8 +1,13 @@
 import {
   fixtureRequest,
   fixtureResponse,
-  handleFixtureReceipt,
+  handleFixtureAuxiliaryRequest,
 } from "../../src/daemons/test-utils/execution-fixture.js";
+import { executeTriggerJob } from "../../src/triggers/code/runner.js";
+import type { TriggerJob } from "../../src/triggers/code/service.js";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { EXECUTION_PROTOCOL_HEADER, EXECUTION_PROTOCOL_VERSION } from "../../src/miko/protocol.js";
 import { createHash, createHmac, randomUUID } from "node:crypto";
 import {
@@ -179,6 +184,66 @@ export class PaseoHub {
     private readonly startApplication: StartBuiltApplication,
     private readonly startSourcePaseo: StartSourcePaseo,
   ) {}
+
+  async deployCodeTrigger(alias: string, artifact: unknown) {
+    const credential = await this.codeTriggerCredential(alias);
+    const response = await this.requests.post(`${this.primary.origin}/api/v1/triggers/install`, {
+      headers: { authorization: `Bearer ${credential}` },
+      data: { artifact },
+    });
+    if (response.status() !== 201)
+      throw new Error(`Code Trigger deployment failed: ${await response.text()}`);
+    return (await response.json()) as { triggerId: string; revisionId: string; version: number };
+  }
+
+  async runCodeTrigger(alias: string, name: string, deliveryKey: string) {
+    const token = await this.codeTriggerCredential(alias);
+    const headers = { authorization: `Bearer ${token}` };
+    const started = await this.requests.post(`${this.primary.origin}/api/v1/triggers/${name}/run`, {
+      headers,
+      data: { deliveryKey, input: null },
+    });
+    expect(started.status()).toBe(201);
+    const body = z.object({ run: z.object({ id: z.string() }) }).parse(await started.json());
+    const enrolled = await this.requests.post(`${this.primary.origin}/api/v1/triggers/runners`, {
+      headers,
+      data: { name: "browser" },
+    });
+    const runner = z.object({ token: z.string() }).parse(await enrolled.json());
+    const directory = await mkdtemp(join(tmpdir(), "hub-browser-trigger-"));
+    try {
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const lease = await this.requests.post(
+          `${this.primary.origin}/api/v1/triggers/runner/lease`,
+          { headers: { authorization: `Bearer ${runner.token}` }, data: {} },
+        );
+        const { job } = (await lease.json()) as { job: TriggerJob | null };
+        if (job === null) break;
+        await executeTriggerJob(job, { url: this.primary.origin, token: runner.token, directory });
+      }
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+    return { status: started.status(), runId: body.run.id };
+  }
+
+  async codeTriggerCredential(alias: string): Promise<string> {
+    const credential = `paseo_cli_${randomUUID().replaceAll("-", "").slice(0, 12)}_${randomUUID().replaceAll("-", "")}`;
+    await this.queryDatabase(
+      this.primary,
+      `insert into organization_cli_credentials (id, organization_id, prefix, verifier, created_by_user_id)
+       select $1, session.active_organization_id, $2, $3, "user".id
+       from session join "user" on "user".id = session.user_id
+       where lower("user".email) = $4 and session.active_organization_id is not null and session.expires_at > now()`,
+      [
+        randomUUID(),
+        credential.slice(0, "paseo_cli_".length + 12),
+        createHash("sha256").update(credential).digest("base64url"),
+        this.requireUser(alias).accountEmail,
+      ],
+    );
+    return credential;
+  }
 
   primaryApplication(): BuiltApplication {
     return this.primary;
@@ -1480,7 +1545,11 @@ export class PaseoHub {
   }
 
   /** An active GitHub installation the trigger editor can name, without the OAuth journey. */
-  async seedGitHubConnection(organizationName: string, slug: string): Promise<void> {
+  async seedGitHubConnection(
+    organizationName: string,
+    slug: string,
+    repository?: string,
+  ): Promise<void> {
     await this.queryDatabase(
       this.primary,
       `insert into github_connections
@@ -1489,6 +1558,13 @@ export class PaseoHub {
        from organization where name = $1`,
       [organizationName, slug],
     );
+    if (repository) {
+      await this.queryDatabase(
+        this.primary,
+        "insert into github_repositories (organization_id,connection_id,repository_id,full_name,default_branch) select c.organization_id,c.id,9001,$3,'main' from github_connections c join organization o on o.id=c.organization_id where o.name=$1 and c.slug=$2",
+        [organizationName, slug, repository],
+      );
+    }
   }
 
   /** A Discord guild the trigger editor can name, without the OAuth journey. */
@@ -5407,6 +5483,22 @@ async function seedSignedDelivery(
 }
 
 async function expectAccessible(page: Page): Promise<void> {
+  // A selected value can still be fading from its placeholder color. Audit the settled UI,
+  // while allowing deliberate infinite progress animations to keep running.
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          document
+            .getAnimations()
+            .filter(
+              (animation) =>
+                animation.playState === "running" &&
+                animation.effect?.getTiming().iterations !== Infinity,
+            ).length,
+      ),
+    )
+    .toBe(0);
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
     .analyze();
@@ -5518,7 +5610,7 @@ class ContractDaemon {
   private acceptExecution(data: RawData): void {
     const publicValue: unknown = JSON.parse(readSocketData(data));
     if (
-      handleFixtureReceipt(publicValue, (frame) => this.socket?.send(frame)) ||
+      handleFixtureAuxiliaryRequest(publicValue, (frame) => this.socket?.send(frame)) ||
       this.acceptHello(publicValue)
     )
       return;

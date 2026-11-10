@@ -1,5 +1,12 @@
 # Public API
 
+The existing `/api/v1/triggers` family now deploys immutable TypeScript/JavaScript artifacts.
+See [programmable Triggers](programmable-triggers.md) for its SDK, CLI, scopes and complete route
+list. `GET /api/v1/triggers` returns deployment metadata, revision endpoints return source,
+and manual/custom event endpoints dispatch code runs. The former Trigger `{ yaml }` request is
+replaced by `{ artifact }`. Historical YAML runs and the project workflow APIs below remain
+available; their template semantics do not apply to literal code-authored agent prompts.
+
 Hub exposes organization-scoped operator operations under `/api/v1`:
 
 | Operation                                   | Scope                    | Endpoint                                 |

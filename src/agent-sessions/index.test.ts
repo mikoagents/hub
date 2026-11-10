@@ -11,6 +11,9 @@ import type { LaunchMachineIntent } from "../dispatcher/launch-machine-intent.js
 import type { DaemonCreateAgentOptions } from "../daemons/protocol.js";
 
 class TestAgents implements AgentConnection {
+  async timeline(): Promise<never> {
+    throw new Error("not used");
+  }
   readonly agents = new Map<string, AgentSnapshot>();
   readonly deliveries: { agentId: string; text: string }[] = [];
   readonly creates: DaemonCreateAgentOptions[] = [];

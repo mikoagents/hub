@@ -311,7 +311,7 @@ it("an expired worker cannot release a newer worker’s wakeup lease", async () 
   }
 });
 
-it("validates, installs, exports and edits scheduled YAML through the existing public API", async () => {
+it("preserves historical scheduled YAML internally while the Trigger API requires code projects", async () => {
   const fixture = await setup("embedded");
   const application = createHubApplication({
     database: fixture.database,
@@ -344,16 +344,17 @@ it("validates, installs, exports and edits scheduled YAML through the existing p
       }),
     );
   try {
-    expect((await request("validate", scheduleYaml)).status).toBe(200);
-    expect((await request("install", scheduleYaml)).status).toBe(201);
+    expect((await request("validate", scheduleYaml)).status).toBe(422);
+    expect((await request("install", scheduleYaml)).status).toBe(422);
+    const historical = await fixture.store.save({ yaml: scheduleYaml, userId: null });
     const edited = scheduleYaml.replace("BYHOUR=9,17", "BYHOUR=8,18;BYMINUTE=15,30;BYSETPOS=1,4");
-    expect((await request("install", edited)).status).toBe(201);
+    await fixture.store.save({ triggerId: historical.id, yaml: edited, userId: null });
     const response = await application.publicApi.handle(
       new Request("http://schedule.test/api/v1/triggers"),
     );
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
-      triggers: [{ name: "scheduled-scan", yaml: edited }],
+      triggers: [{ name: "scheduled-scan", format: "single_run" }],
     });
     expect(await fixture.store.list()).toHaveLength(1);
     expect(await fixture.database.schedules.tick(await fixture.due())).toBe(1);
@@ -398,7 +399,7 @@ it("runs one trigger from its schedule and from a manual dispatch by the trigger
     .replace("on:\n", "inputs:\n  focus: { type: string, default: everything }\non:\n")
     .replace("run:\n", "  manual.run: {}\nrun:\n");
   try {
-    expect((await post("triggers/install", { yaml })).status).toBe(201);
+    await fixture.store.save({ yaml, userId: null });
 
     expect(await fixture.database.schedules.tick(await fixture.due())).toBe(1);
     const [tick] = await fixture.receipts();

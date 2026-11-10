@@ -44,6 +44,30 @@ export const triggerActivitySnapshot = createServerFn({ method: "GET" })
     }
   });
 
+export const triggerActivityTimeline = createServerFn({ method: "GET" })
+  .validator(
+    activityScopeSchema
+      .extend({ executionId: z.string().uuid(), before: z.number().int().positive().optional() })
+      .strict(),
+  )
+  .handler(
+    async ({
+      data,
+    }): Promise<Result<Awaited<ReturnType<TriggerDashboard["activityRunTimeline"]>>>> => {
+      try {
+        const dashboard = (await getApplication()).triggerDashboard;
+        if (!dashboard) throw new Error("trigger dashboard unavailable");
+        return respondOk(await dashboard.activityRunTimeline(getRequest(), data));
+      } catch (error) {
+        return respondWithFailure(
+          error,
+          triggerContext("trigger.activity.timeline", data.organizationSlug),
+          { fallback: "Hub couldn't load this session.", notFound: "Run unavailable." },
+        );
+      }
+    },
+  );
+
 export const triggerActivityLogs = createServerFn({ method: "GET" })
   .validator(activityLogsSchema)
   .handler(async ({ data }): Promise<Result<TriggerActivityLogs>> => {
@@ -102,6 +126,96 @@ export const saveTrigger = createServerFn({ method: "POST" })
   });
 
 export type TriggerSnapshot = Awaited<ReturnType<TriggerDashboard["snapshot"]>>;
+export type CodeTriggerDetail = Awaited<ReturnType<TriggerDashboard["codeDetail"]>>;
+
+export const triggerRunHistory = createServerFn({ method: "GET" })
+  .validator(scopeSchema.extend({ triggerId: z.string().uuid() }).strict())
+  .handler(
+    async ({ data }): Promise<Result<Awaited<ReturnType<TriggerDashboard["triggerHistory"]>>>> => {
+      try {
+        const dashboard = (await getApplication()).triggerDashboard;
+        if (!dashboard) throw new Error("Trigger dashboard unavailable");
+        return respondOk(
+          await dashboard.triggerHistory(getRequest(), data.organizationSlug, data.triggerId),
+        );
+      } catch (error) {
+        return respondWithFailure(error, triggerContext("trigger.history", data.organizationSlug), {
+          fallback: "Hub couldn't load this Trigger's runs.",
+          notFound: "Trigger unavailable.",
+        });
+      }
+    },
+  );
+
+export const codeTriggerDetail = createServerFn({ method: "GET" })
+  .validator(
+    scopeSchema.extend({ triggerId: z.string().uuid(), revisionId: z.string().uuid().optional() }),
+  )
+  .handler(
+    async ({ data }): Promise<Result<Awaited<ReturnType<TriggerDashboard["codeDetail"]>>>> => {
+      try {
+        const dashboard = (await getApplication()).triggerDashboard;
+        if (!dashboard) throw new Error("Trigger dashboard unavailable");
+        return respondOk(
+          await dashboard.codeDetail(
+            getRequest(),
+            data.organizationSlug,
+            data.triggerId,
+            data.revisionId,
+          ),
+        );
+      } catch (error) {
+        return respondWithFailure(
+          error,
+          triggerContext("trigger.code.detail", data.organizationSlug),
+          { fallback: "Hub couldn't load this Trigger's source." },
+        );
+      }
+    },
+  );
+
+export const codeTriggerRunDetail = createServerFn({ method: "GET" })
+  .validator(activityScopeSchema)
+  .handler(
+    async ({ data }): Promise<Result<Awaited<ReturnType<TriggerDashboard["codeRunDetail"]>>>> => {
+      try {
+        const dashboard = (await getApplication()).triggerDashboard;
+        if (!dashboard) throw new Error("Trigger dashboard unavailable");
+        return respondOk(await dashboard.codeRunDetail(getRequest(), data));
+      } catch (error) {
+        return respondWithFailure(
+          error,
+          triggerContext("trigger.code.run", data.organizationSlug),
+          { fallback: "Hub couldn't load this Trigger run." },
+        );
+      }
+    },
+  );
+
+export const codeTriggerAction = createServerFn({ method: "POST" })
+  .validator(
+    scopeSchema.extend({
+      triggerId: z.string().uuid(),
+      action: z.enum(["run", "enable", "disable", "cancel"]),
+      runId: z.string().uuid().optional(),
+    }),
+  )
+  .handler(async ({ data }): Promise<Result<{ state: "complete" }>> => {
+    try {
+      const dashboard = (await getApplication()).triggerDashboard;
+      if (!dashboard) throw new Error("Trigger dashboard unavailable");
+      return respondOk(await dashboard.codeAction(getRequest(), data));
+    } catch (error) {
+      return respondWithFailure(
+        error,
+        triggerContext("trigger.code.action", data.organizationSlug),
+        {
+          fallback: error instanceof Error ? error.message : "Trigger action failed.",
+          forbidden: "You don't have permission to manage Triggers.",
+        },
+      );
+    }
+  });
 
 function triggerContext(operation: string, organizationSlug: string) {
   return { operation, component: "triggers", organizationSlug } as const;

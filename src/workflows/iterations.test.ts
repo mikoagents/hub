@@ -49,6 +49,26 @@ describe("user continues unfinished work without another webhook", () => {
     assert.equal(prompt.includes("tree=abc; add location permission tests"), true);
     context.steps[first.id]!.output.outcome = "complete";
     assert.equal(evaluateExpression(second.condition!, context), false);
+    assert.equal(
+      evaluateExpression(trigger.steps[2]!.condition!, {
+        ...context,
+        steps: { ...context.steps, [second.id]: { status: "skipped", output: null } },
+      }),
+      false,
+    );
+    const longer = compileTriggerDocument(iterativeTrigger.replace("max_runs: 3", "max_runs: 4"))
+      .events[0]!;
+    assert.equal(
+      evaluateExpression(longer.steps[3]!.condition!, {
+        ...context,
+        steps: {
+          [first.id]: { status: "succeeded", output: { outcome: "continue" } },
+          [second.id]: { status: "succeeded", output: { outcome: "complete" } },
+          [longer.steps[2]!.id]: { status: "skipped", output: null },
+        },
+      }),
+      false,
+    );
   });
 
   it("user cannot report a coverage failure as an external blocker or omit the checkpoint", () => {
