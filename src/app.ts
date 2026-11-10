@@ -1,3 +1,6 @@
+import { TriggerCodeService } from "./triggers/code/service.js";
+import { createTriggerCodeAgentHost } from "./triggers/code/agent-host.js";
+import { createTriggerCodeApi } from "./triggers/code/api.js";
 import { createScheduleSource, createScheduleProvider } from "./triggers/schedule/index.js";
 import { createExecutionCapabilityServer } from "./execution-capabilities/server.js";
 import { OutputExecutorRegistry } from "./execution-capabilities/outputs.js";
@@ -54,6 +57,7 @@ import type { EntitlementsService } from "./entitlements/service.js";
 import type { ExecutionAuthority } from "./execution-authority/index.js";
 
 export interface HubRuntimeOptions {
+  githubAuthority?: import("./providers/registration.js").GitHubAuthorityRegistration;
   database: Database | null;
   /** Required end to end so the executions meter can never be silently skipped. */
   entitlements: EntitlementsService | null;
@@ -75,6 +79,7 @@ export interface HubRuntimeOptions {
 }
 
 export interface HubRuntime {
+  triggerCode?: TriggerCodeService | null;
   daemonModule: DaemonModule | null;
   connectionForDaemon(daemonId: string): import("./daemons/index.js").DaemonConnection | undefined;
   /** The daemons' own answer about an agent configuration; null without a database. */
@@ -232,10 +237,19 @@ export function createHubApplication(options: HubRuntimeOptions): HubApplication
       ? {}
       : { dispatchLaunchMachineIntent: durableDispatchHandler }),
   });
+  const { triggerCode, triggerDispatcher } = composeCodeTriggers(
+    options,
+    agentValidator,
+    daemonModule,
+    workflowEngine,
+    workflowDispatcher,
+    (id) => connectionForDaemon(id) !== undefined,
+  );
   connectDaemonLifecycle(daemons, daemonModule);
   let activeSources: readonly TriggerSource[] = [];
 
   const hub: HubRuntime = {
+    triggerCode,
     daemonModule,
     connectionForDaemon,
     agentValidator,
@@ -252,18 +266,24 @@ export function createHubApplication(options: HubRuntimeOptions): HubApplication
         daemonModule?.lifecycle.recoverPendingHubActions(),
       ]);
       workflowEngine.start();
+      triggerCode?.start();
       activeSources = [
         ...(manualSource === undefined ? [] : [manualSource]),
         ...(scheduleSource === undefined ? [] : [scheduleSource]),
         ...sources,
       ];
-      await Promise.all(activeSources.map(async (source) => source.start(workflowDispatcher)));
+      await Promise.all(activeSources.map(async (source) => source.start(triggerDispatcher)));
     },
     async stop() {
       try {
         await Promise.all(activeSources.map(async (source) => source.stop()));
         activeSources = [];
-        await Promise.all([workflowEngine.stop(), daemonModule?.lifecycle.stop(), daemons?.stop()]);
+        await Promise.all([
+          triggerCode?.stop(),
+          workflowEngine.stop(),
+          daemonModule?.lifecycle.stop(),
+          daemons?.stop(),
+        ]);
       } finally {
         await options.executionAuthority?.stop();
       }
@@ -275,7 +295,8 @@ export function createHubApplication(options: HubRuntimeOptions): HubApplication
     storeForProject,
     agentValidator,
   );
-  const publicApi = createPublicApi(options.publicApi, publicOperations);
+  const legacyPublicApi = createPublicApi(options.publicApi, publicOperations);
+  const publicApi = composeTriggerPublicApi(triggerCode, options.publicApi, legacyPublicApi);
   const operations: HubOperations = {
     handleDaemonEnrollment: (request) =>
       options.database === null
@@ -327,6 +348,39 @@ export function createHubApplication(options: HubRuntimeOptions): HubApplication
  * Every question Hub asks a daemon goes through its connection, so a test that stands in a
  * connection stands in for agent validation too.
  */
+function composeCodeTriggers(
+  options: HubRuntimeOptions,
+  agentValidator: DaemonAgentConfigurationValidator | null,
+  daemonModule: DaemonModule | null,
+  workflowEngine: import("./workflows/engine.js").DurableWorkflowEngine,
+  workflowDispatcher: import("./triggers/index.js").TriggerHandler,
+  isDaemonConnected: (id: string) => boolean,
+) {
+  const triggerCode =
+    options.database === null || agentValidator === null
+      ? null
+      : new TriggerCodeService(
+          options.database,
+          createTriggerCodeAgentHost({
+            database: options.database,
+            validator: agentValidator,
+            isDaemonConnected,
+            wake: () => workflowEngine.processAvailable(),
+            cancelExecutions: (ids, reason) =>
+              daemonModule?.lifecycle.cancelAgentExecutions(ids, reason) ?? Promise.resolve(),
+            ...(options.githubAuthority === undefined
+              ? {}
+              : { githubAuthority: options.githubAuthority }),
+          }),
+        );
+  const triggerDispatcher: import("./triggers/index.js").TriggerHandler = async (event) => {
+    if (await triggerCode?.acceptProviderEvent(event))
+      return { providerEventReceiptId: event.providerEventReceiptId };
+    return workflowDispatcher(event);
+  };
+  return { triggerCode, triggerDispatcher };
+}
+
 function createAgentValidator(
   daemons: ActiveDaemonRegistry | null,
   connectionForDaemon: (daemonId: string) => DaemonConnection | undefined,
@@ -504,4 +558,12 @@ function createAppDaemonModule(
 
 function appScheduleSource(database: Database | null): TriggerSource | undefined {
   return database === null ? undefined : createScheduleSource(database.schedules);
+}
+
+function composeTriggerPublicApi(
+  code: TriggerCodeService | null,
+  composition: PublicApiComposition,
+  fallback: PublicApi,
+) {
+  return code === null ? fallback : createTriggerCodeApi(code, composition, fallback);
 }

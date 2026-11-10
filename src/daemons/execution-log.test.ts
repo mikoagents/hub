@@ -41,3 +41,18 @@ it("retains messages and tool output while scrubbing nested credentials and echo
     },
   );
 });
+
+it("retains numeric usage counters without weakening credential redaction", () => {
+  assert.deepEqual(
+    executionLogEvent({
+      lastUsage: { inputTokens: 100, outputTokens: 20 },
+      authToken: 123,
+      inputTokens: "credential",
+    }),
+    {
+      lastUsage: { inputTokens: 100, outputTokens: 20 },
+      authToken: "[Redacted]",
+      inputTokens: "[Redacted]",
+    },
+  );
+});

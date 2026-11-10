@@ -1,6 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 import { test } from "./app.js";
-import { OrganizationTriggers } from "./helpers/triggers.js";
+import { OrganizationTriggers, manualTriggerArtifact } from "./helpers/triggers.js";
 
 test("follows the system, remembers an override, and returns to automatic appearance", async ({
   hub,
@@ -82,7 +82,7 @@ for (const theme of ["light", "dark"] as const) {
   });
 }
 
-test("keeps the chosen appearance through sign in, dashboard navigation, and the code editor", async ({
+test("keeps the chosen appearance through sign in, dashboard navigation, and read-only Trigger source", async ({
   hub,
   page,
 }) => {
@@ -94,24 +94,17 @@ test("keeps the chosen appearance through sign in, dashboard navigation, and the
     password: "theme-owner-password",
   });
   await hub.createOrganization("owner", "Theme workspace");
-  const daemon = await hub.connectProviderDaemon("owner", "Theme workspace");
   await expectTheme(page, "light");
   await expect(page.getByRole("button", { name: "Appearance", exact: true })).toBeVisible();
 
   const triggers = new OrganizationTriggers(page);
   await triggers.open();
-  await triggers.startNew();
-  await triggers.configureManual({
-    name: "theme-preview",
-    daemon,
-    cwd: "/workspace",
-    agent: "opencode/gateway/vendor/model-v1",
-    mode: "full-access",
-    thinking: "low",
-    prompt: "Summarize the changes.",
-  });
-  await page.getByRole("radio", { name: "YAML", exact: true }).click();
-  const editor = page.getByTestId("code-editor");
+  await hub.deployCodeTrigger("owner", manualTriggerArtifact("theme-preview"));
+  await triggers.open();
+  await page.getByRole("link", { name: "theme-preview", exact: true }).click();
+  await page.getByRole("button", { name: "trigger.ts", exact: true }).click();
+  const editor = page.getByRole("textbox", { name: "trigger.ts value", exact: true });
+  await expect(editor).toHaveAttribute("aria-readonly", "true");
   await expect(editor).toHaveCSS("color", "rgb(40, 42, 48)");
   await chooseTheme(page, "Dark");
   await expectTheme(page, "dark");

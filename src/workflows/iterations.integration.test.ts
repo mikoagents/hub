@@ -9,15 +9,7 @@ describe("user resumes unfinished repairs through the persisted Hub workflow", (
   beforeEach(async () => {
     hub = await HubHarness.start();
     await hub.connectDaemon();
-    const response = await fetch(`${hub.originUrl()}/api/v1/triggers/install`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: "Bearer paseo_pk_hub-harness_test",
-      },
-      body: JSON.stringify({ yaml: document(hub.connectedDaemonSlug()) }),
-    });
-    assert.equal(response.status, 201, await response.text());
+    await hub.seedHistoricalTrigger(document(hub.connectedDaemonSlug()));
   }, 120_000);
   afterEach(async () => {
     await hub.stop();
@@ -62,7 +54,7 @@ describe("user resumes unfinished repairs through the persisted Hub workflow", (
     assert.equal(duplicate.triggerRunId, started.triggerRunId);
     assert.notEqual(second.id, first.id);
     assert.notEqual(second.completionTokenHash, first.completionTokenHash);
-    assert.deepEqual(second.launchIntent?.iteration, { index: 2, limit: 3 });
+    assert.deepEqual(second.launchIntent?.iteration, { index: 2, limit: 4 });
     assert.equal(second.launchIntent?.prompt.includes(checkpoint), true);
     await hub.callSessionTool(second.id, "finish_execution", {
       output: {
@@ -109,6 +101,21 @@ describe("user resumes unfinished repairs through the persisted Hub workflow", (
     assert.equal(state.runFailure, "external_blocker:permission: GitHub App write access revoked");
     assert.equal(await hub.pendingExecutionCount(), 0);
   });
+
+  it("user completes in the first segment without reading outputs from skipped later segments", async () => {
+    await hub.runManual({ trigger: "repair", deliveryKey: "repair-complete-first" });
+    await hub.waitForCreatedAgentRequests(1);
+    const execution = await hub.waitForPendingExecution();
+    await hub.callSessionTool(execution.id, "finish_execution", {
+      output: { outcome: "complete", checkpoint: "Verified work finished in the first segment." },
+    });
+    await expect
+      .poll(async () => (await hub.workflowExecutionState(execution.id)).runStatus)
+      .toBe("succeeded");
+    await hub.restartApp();
+    assert.equal((await hub.workflowExecutionState(execution.id)).runStatus, "succeeded");
+    assert.equal(await hub.pendingExecutionCount(), 0);
+  });
 });
 
 function toolFailed(response: Record<string, unknown>): boolean {
@@ -124,7 +131,7 @@ max_runtime: 4h
 on:
   manual.run: {}
 run:
-  iterations: { max_runs: 3 }
+  iterations: { max_runs: 4 }
   continuation: { mode: new }
   target: { daemon: ${daemon}, cwd: /workspace/repair }
   agent: { provider: codex, mode: full-access }

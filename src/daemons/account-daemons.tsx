@@ -18,6 +18,7 @@ import { FormField } from "../components/app/form-field.js";
 import { PageHeader } from "../components/app/page.js";
 import { RelativeTime } from "../components/app/relative-time.js";
 import { RowActions } from "../components/app/row-actions.js";
+import { SegmentedControl } from "../components/app/segmented-control.js";
 import { StatusPill } from "../components/app/status-pill.js";
 import { TwoLine } from "../components/app/two-line.js";
 import { Button } from "../components/ui/button.js";
@@ -32,15 +33,25 @@ import {
 import type { Result } from "../contract/respond.js";
 import { DAEMON_MUTATION_KEY } from "../auth/tenant-mutation.js";
 import { daemonLoginCommand, GRANT_EXECUTE_COMMAND } from "./handoff.js";
+import { usePersistedChoice } from "../preferences/persisted-choice.js";
 import { daemonsQueryKey, refreshDaemons } from "./status.js";
+import { DaemonProviders } from "./daemon-providers.js";
+import {
+  DAEMON_STATUS_FILTERS,
+  DAEMON_STATUS_FILTER_OPTIONS,
+  daemonFilterEmpty,
+  daemonMatchesStatus,
+  type DaemonStatusFilter,
+} from "./status-filter.js";
 
 const DAEMON_COLUMNS: readonly DataColumn[] = [
   { header: "Slug", fill: true },
-  { header: "ID" },
+  { header: "ID", className: "hidden xl:table-cell" },
   { header: "Status" },
-  { header: "Access", fill: true },
-  { header: "Last seen" },
-  { header: "Registered" },
+  { header: "Providers" },
+  { header: "Access", fill: true, className: "hidden md:table-cell" },
+  { header: "Last seen", className: "hidden lg:table-cell" },
+  { header: "Registered", className: "hidden xl:table-cell" },
   { header: "", align: "end" },
 ];
 const DAEMONS_DESCRIPTION = "Stable daemon identities registered to this organization.";
@@ -142,7 +153,22 @@ export function DaemonsPanel({
     (daemonId: string) => revoke.mutate({ data: { organizationSlug, daemonId } }),
     [organizationSlug, revoke],
   );
-  if (snapshot.status === "pending") return <DaemonLoading />;
+  const {
+    value: filter,
+    setValue: setFilter,
+    ready,
+  } = usePersistedChoice(`paseo-hub-daemon-status:${organizationId}`, DAEMON_STATUS_FILTERS, "all");
+  if (snapshot.status === "pending" || !ready) {
+    return (
+      <>
+        <PageHeader id="daemons-heading" title="Daemons" description={DAEMONS_DESCRIPTION} />
+        <div className="grid gap-6">
+          <DaemonStatusFilter value={filter} onChange={setFilter} />
+          <DataTableSkeleton label="Daemons" columns={DAEMON_COLUMNS} />
+        </div>
+      </>
+    );
+  }
   if (snapshot.status === "error") {
     return (
       <FailureAlert
@@ -153,6 +179,7 @@ export function DaemonsPanel({
     );
   }
   const daemons = snapshot.data;
+  const visibleDaemons = daemons.daemons.filter((daemon) => daemonMatchesStatus(daemon, filter));
   const revokeFailed = revoke.isError || revoke.data?.status === "error";
   const busy = rename.isPending || revoke.isPending;
   return (
@@ -166,35 +193,68 @@ export function DaemonsPanel({
           fallback="Hub did not receive the daemon revocation result. Check your connection and reload its current status."
         />
       ) : null}
-      <DataTable
-        label="Daemons"
-        columns={DAEMON_COLUMNS}
-        isEmpty={daemons.daemons.length === 0}
-        empty={DAEMONS_EMPTY}
-      >
-        {daemons.daemons.map((daemon) => (
-          <DaemonRow
-            key={daemon.id}
-            daemon={daemon}
-            canManage={daemons.canManage}
-            busy={busy}
-            onRename={renameSelected}
-            onRevoke={revokeSelected}
-          />
-        ))}
-      </DataTable>
+      <div className="grid gap-6">
+        <DaemonStatusFilter value={filter} onChange={setFilter} />
+        <DataTable
+          label="Daemons"
+          columns={DAEMON_COLUMNS}
+          isEmpty={visibleDaemons.length === 0}
+          empty={
+            daemons.daemons.length === 0 || filter === "all"
+              ? DAEMONS_EMPTY
+              : daemonFilterEmpty(filter)
+          }
+        >
+          {visibleDaemons.map((daemon) => (
+            <DaemonRow
+              key={daemon.id}
+              daemon={daemon}
+              accountId={accountId}
+              organizationId={organizationId}
+              organizationSlug={organizationSlug}
+              canManage={daemons.canManage}
+              busy={busy}
+              onRename={renameSelected}
+              onRevoke={revokeSelected}
+            />
+          ))}
+        </DataTable>
+      </div>
     </>
+  );
+}
+
+function DaemonStatusFilter({
+  value,
+  onChange,
+}: {
+  value: DaemonStatusFilter;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <SegmentedControl
+      label="Daemon status"
+      value={value}
+      options={DAEMON_STATUS_FILTER_OPTIONS}
+      onChange={onChange}
+    />
   );
 }
 
 function DaemonRow({
   daemon,
+  accountId,
+  organizationId,
+  organizationSlug,
   canManage,
   busy,
   onRename,
   onRevoke,
 }: {
   daemon: BrowserDaemon;
+  accountId: string;
+  organizationId: string;
+  organizationSlug: string;
   canManage: boolean;
   busy: boolean;
   onRename: (daemonId: string, slug: string) => Promise<string | undefined>;
@@ -217,6 +277,14 @@ function DaemonRow({
       </DataCell>
       <DataCell>
         <DaemonStatus daemon={daemon} />
+      </DataCell>
+      <DataCell>
+        <DaemonProviders
+          daemon={daemon}
+          accountId={accountId}
+          organizationId={organizationId}
+          organizationSlug={organizationSlug}
+        />
       </DataCell>
       <DataCell muted>
         {daemon.permissions.includes("hub.execute") ? (
@@ -332,13 +400,4 @@ function DaemonStatus({ daemon }: { daemon: BrowserDaemon }) {
   if (daemon.status === "revoked") return <StatusPill tone="danger">Revoked</StatusPill>;
   if (daemon.presence === "connected") return <StatusPill tone="success">Connected</StatusPill>;
   return <StatusPill tone="neutral">Offline</StatusPill>;
-}
-
-function DaemonLoading() {
-  return (
-    <>
-      <PageHeader id="daemons-heading" title="Daemons" description={DAEMONS_DESCRIPTION} />
-      <DataTableSkeleton label="Daemons" columns={DAEMON_COLUMNS} />
-    </>
-  );
 }

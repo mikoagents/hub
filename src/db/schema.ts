@@ -32,8 +32,118 @@ export type AgentExecutionStatus = (typeof AGENT_EXECUTION_STATUSES)[number];
 
 export const PROJECT_STATUSES = ["active", "archived"] as const;
 export const CONFIGURATION_SOURCE_KINDS = ["github", "manual"] as const;
-export const TRIGGER_FORMATS = ["single_run", "legacy_multistep"] as const;
+export const TRIGGER_FORMATS = ["single_run", "legacy_multistep", "code"] as const;
 export const CONNECTION_PROVIDERS = ["github", "slack", "discord", "linear"] as const;
+
+/** Executable Trigger code uses the same Trigger identity and immutable revision ownership. */
+export const triggerCodeRuns = pgTable(
+  "trigger_code_runs",
+  {
+    id: uuid().primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    triggerId: uuid("trigger_id")
+      .notNull()
+      .references(() => organizationTriggers.id, { onDelete: "cascade" }),
+    revisionId: uuid("revision_id")
+      .notNull()
+      .references(() => organizationTriggerRevisions.id),
+    status: text().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    document: jsonb().notNull(),
+  },
+  (table) => [
+    index("trigger_code_runs_organization_created_idx").on(table.organizationId, table.createdAt),
+    index("trigger_code_runs_status_idx").on(table.status),
+  ],
+);
+
+export const triggerCodeOperations = pgTable(
+  "trigger_code_operations",
+  {
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => triggerCodeRuns.id, { onDelete: "cascade" }),
+    operationId: text("operation_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    document: jsonb().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.runId, table.operationId] })],
+);
+
+export const triggerCodeEvents = pgTable(
+  "trigger_code_events",
+  {
+    sequence: bigserial({ mode: "number" }).primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    triggerId: uuid("trigger_id")
+      .notNull()
+      .references(() => organizationTriggers.id, { onDelete: "cascade" }),
+    deliveryId: text("delivery_id").notNull(),
+    receivedAt: timestamp("received_at", { withTimezone: true }).notNull(),
+    document: jsonb().notNull(),
+  },
+  (table) => [
+    uniqueIndex("trigger_code_events_delivery_unique").on(table.triggerId, table.deliveryId),
+    index("trigger_code_events_trigger_sequence_idx").on(table.triggerId, table.sequence),
+  ],
+);
+
+export const triggerCodeState = pgTable(
+  "trigger_code_state",
+  {
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    triggerId: uuid("trigger_id")
+      .notNull()
+      .references(() => organizationTriggers.id, { onDelete: "cascade" }),
+    kind: text().notNull(),
+    stateKey: text("state_key").notNull(),
+    ownerRunId: uuid("owner_run_id").references(() => triggerCodeRuns.id, { onDelete: "cascade" }),
+    document: jsonb().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.triggerId, table.kind, table.stateKey] })],
+);
+
+export const triggerCodeRunners = pgTable(
+  "trigger_code_runners",
+  {
+    id: uuid().primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    name: text().notNull(),
+    tokenHash: text("token_hash").notNull(),
+    document: jsonb().notNull(),
+  },
+  (table) => [
+    uniqueIndex("trigger_code_runners_name_unique").on(table.organizationId, table.name),
+    uniqueIndex("trigger_code_runners_token_unique").on(table.tokenHash),
+  ],
+);
+
+export const triggerCodeLogs = pgTable(
+  "trigger_code_logs",
+  {
+    id: uuid().primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => triggerCodeRuns.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    document: jsonb().notNull(),
+  },
+  (table) => [index("trigger_code_logs_run_created_idx").on(table.runId, table.createdAt)],
+);
 
 export type MachineSource =
   | { kind: "manual"; userId?: string }
@@ -292,7 +402,7 @@ export const organizationTriggers = pgTable(
     ),
     check(
       "organization_triggers_format_check",
-      sql`${table.format} in ('single_run', 'legacy_multistep')`,
+      sql`${table.format} in ('single_run', 'legacy_multistep', 'code')`,
     ),
   ],
 );
@@ -809,6 +919,24 @@ export const agentExecutionLogs = pgTable(
     event: jsonb().notNull(),
   },
   (table) => [index("agent_execution_logs_execution_id_idx").on(table.executionId, table.id)],
+);
+
+export const agentSessionTimelines = pgTable("agent_session_timelines", {
+  sessionId: uuid("session_id")
+    .primaryKey()
+    .references(() => agentSessions.id, { onDelete: "cascade" }),
+  data: jsonb().notNull(),
+});
+export const agentSessionTimelineRows = pgTable(
+  "agent_session_timeline_rows",
+  {
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => agentSessionTimelines.sessionId, { onDelete: "cascade" }),
+    seq: integer().notNull(),
+    data: jsonb().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.sessionId, table.seq] })],
 );
 
 export const users = pgTable("user", {

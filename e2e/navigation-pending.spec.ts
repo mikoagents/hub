@@ -3,7 +3,7 @@ import { test } from "./app.js";
 import type { PaseoHub } from "./helpers/hub.js";
 import { projectApp } from "./helpers/projects/index.js";
 import { holdPageScripts, holdPageData } from "./helpers/pending-navigation.js";
-import { OrganizationTriggers } from "./helpers/triggers.js";
+import { OrganizationTriggers, manualTriggerArtifact } from "./helpers/triggers.js";
 
 const owner = {
   name: "Alice",
@@ -104,16 +104,18 @@ test("removes the previous page's header actions when its replacement is present
   page,
 }) => {
   await openOrganization(hub, page);
-  await new OrganizationTriggers(page).startNew();
+  await hub.deployCodeTrigger("owner", manualTriggerArtifact("navigation-trigger"));
+  await new OrganizationTriggers(page).open();
+  await page.getByRole("link", { name: "navigation-trigger", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Run now", exact: true })).toBeVisible();
   const download = await holdPageScripts(page);
   try {
     await projectApp(page).navigation.openOrganizationSection("Daemons");
     await download.requested;
-    await projectApp(page).navigation.expectBreadcrumb("Acme", "Triggers", "Trigger editor");
-    await expect(page.getByRole("radio", { name: "Form", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Run now", exact: true })).toBeVisible();
     await download.showPendingPage();
     await expectOrganizationDestination(page, "Daemons");
-    await expect(page.getByRole("radio", { name: "Form", exact: true })).toBeHidden();
+    await expect(page.getByRole("button", { name: "Run now", exact: true })).toBeHidden();
   } finally {
     await download.release();
   }

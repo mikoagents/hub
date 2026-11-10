@@ -18,6 +18,12 @@
     "drizzle"
   ],
   "type": "module",
+  "exports": {
+    "./triggers": {
+      "types": "./dist/triggers/code/sdk.d.ts",
+      "import": "./dist/triggers/code/sdk.js"
+    }
+  },
   "publishConfig": {
     "access": "public"
   },
@@ -26,7 +32,7 @@
     "build": "npm run build:node && npm run build:start",
     "prepack": "npm run build",
     "release:check": "npm run test:release && npm run typecheck && npm run lint && npm run format:check && npm run build && npm pack --dry-run",
-    "build:node": "tsgo -p tsconfig.json",
+    "build:node": "tsgo -p tsconfig.json && tsgo -p tsconfig.triggers.json",
     "build:start": "vite build",
     "typecheck": "npm run typecheck:node && npm run typecheck:start && npm run typecheck:e2e",
     "typecheck:node": "tsgo --noEmit -p tsconfig.json",
@@ -78,10 +84,12 @@
     "discord.js": "^14.26.4",
     "dotenv": "^16.4.7",
     "drizzle-orm": "0.45.2",
+    "esbuild": "0.27.7",
     "js-yaml": "^4.1.0",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^1.25.0",
     "octokit": "^4.0.2",
+    "pele": "1.13.0",
     "pg": "^8.20.0",
     "pino": "^9.6.0",
     "pino-pretty": "^13.0.0",
@@ -91,6 +99,7 @@
     "rrule-temporal": "2.2.4",
     "stripe": "^18.5.0",
     "tailwind-merge": "3.4.0",
+    "typescript": "^5.8.2",
     "ws": "^8.21.3",
     "yaml": "^2.8.3",
     "zod": "^4.4.3"
@@ -118,7 +127,6 @@
     "oxlint-tsgolint": "0.22.1",
     "tailwindcss": "4.3.3",
     "tsx": "^4.19.3",
-    "typescript": "^5.8.2",
     "vite": "7.3.6",
     "vitest": "^3.2.4"
   },

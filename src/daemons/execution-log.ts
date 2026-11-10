@@ -24,11 +24,25 @@ export function executionLogEvent(value: unknown, secrets: readonly string[] = [
   return Object.fromEntries(
     Object.entries(value).map(([key, entry]) => [
       key,
-      /(?:token|secret|password|credential|authorization|cookie|headers|privatekey|apikey|accesskey)|^(?:env|environment|auth)$/u.test(
-        key.replace(/[^a-z0-9]/giu, "").toLowerCase(),
-      )
-        ? "[Redacted]"
-        : executionLogEvent(entry, secrets),
+      sensitiveField(key, entry) ? "[Redacted]" : executionLogEvent(entry, secrets),
     ]),
   );
 }
+
+function sensitiveField(key: string, value: unknown): boolean {
+  const normalized = key.replace(/[^a-z0-9]/giu, "").toLowerCase();
+  if (typeof value === "number" && TOKEN_COUNTERS.has(normalized)) return false;
+  return /(?:token|secret|password|credential|authorization|cookie|headers|privatekey|apikey|accesskey)|^(?:env|environment|auth)$/u.test(
+    normalized,
+  );
+}
+const TOKEN_COUNTERS = new Set([
+  "inputtokens",
+  "outputtokens",
+  "cachedinputtokens",
+  "cachedoutputtokens",
+  "totaltokens",
+  "reasoningtokens",
+  "cachecreationinputtokens",
+  "cachereadinputtokens",
+]);

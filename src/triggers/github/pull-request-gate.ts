@@ -68,7 +68,9 @@ export function pullRequestComplete(
     review === undefined ||
     !review.body.includes(policy.review.body_contains) ||
     !reviewSummary(review.body).includes(label.review_body_contains) ||
-    reviewSummary(review.body).includes("REVIEW INCOMPLETE")
+    reviewSummary(review.body).includes("REVIEW INCOMPLETE") ||
+    (policy.incomplete_review !== undefined &&
+      reviewSummary(review.body).includes(policy.incomplete_review.body_contains))
   )
     return false;
   if (snapshot.threads.some((thread) => !thread.resolved)) return false;
@@ -149,8 +151,26 @@ export function readyPullRequestKey(
           item.state !== "PENDING" &&
           reviewSummary(item.body).includes("CHANGES REQUESTED"))),
   );
-  if (failed.length === 0 && !threads.some((thread) => !thread.resolved) && attention.length === 0)
-    return undefined;
+  if (
+    failed.length === 0 &&
+    !threads.some((thread) => !thread.resolved) &&
+    attention.length === 0
+  ) {
+    if (
+      policy.incomplete_review === undefined ||
+      !reviewSummary(review.body).includes(policy.incomplete_review.body_contains)
+    )
+      return undefined;
+    // One supplemental-verification workflow per head and review policy. A new incomplete
+    // receipt or unrelated successful CI cannot create an unbounded review/retry cycle.
+    const verification = {
+      target,
+      head: expectedHead,
+      review: policy.review,
+      incomplete_review: policy.incomplete_review,
+    };
+    return `github.pull_request:${createHash("sha256").update(JSON.stringify(verification)).digest("hex")}`;
+  }
 
   // Resolutions and unrelated successful workflows do not introduce new repair input.
   // Keep trusted thread content in the identity even after resolution so that resolving

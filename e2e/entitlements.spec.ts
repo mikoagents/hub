@@ -1,7 +1,7 @@
 import { expect } from "@playwright/test";
 import { test } from "./app.js";
 import { projectApp } from "./helpers/projects/index.js";
-import { OrganizationTriggers } from "./helpers/triggers.js";
+import { manualTriggerArtifact } from "./helpers/triggers.js";
 
 const owner = {
   name: "Amara",
@@ -88,7 +88,6 @@ test.describe("metered usage", () => {
   }) => {
     const reason = "Trial cap on monthly executions";
     const app = projectApp(page);
-    const triggers = new OrganizationTriggers(page);
     let daemonSlug = "";
 
     await test.step("sign up, create an organization, register a daemon, become an operator", async () => {
@@ -106,40 +105,15 @@ test.describe("metered usage", () => {
 
     await test.step("install a manual deploy trigger against the registered daemon", async () => {
       await app.navigation.leaveInstance();
-      await triggers.startNew();
-      await triggers.configureManual({
-        name: "deploy",
-        daemon: daemonSlug,
-        cwd: "/workspace",
-        agent: "codex/gpt-5.4",
-        mode: "full-access",
-        thinking: "high",
-        prompt: "${{ paseo.prompt }}",
-      });
-      await triggers.save("deploy");
+      await hub.deployCodeTrigger("owner", manualTriggerArtifact("deploy", daemonSlug));
     });
-
-    const runApiKey = await hub.createRunApiKey("owner");
-
     await test.step("run one execution: allowed", async () => {
-      const first = await hub.runManualInput({
-        rawInput: "run it",
-        deliveryKey: "slice-3-run-1",
-        apiKey: runApiKey,
-      });
-      expect(first.workflowStatus).toBe("running");
+      const first = await hub.runCodeTrigger("owner", "deploy", "slice-3-run-1");
+      expect(first.status).toBe(201);
     });
-
-    await test.step("a second execution in the same month is accepted, then denied by the meter", async () => {
-      // Metering is per-execution now, so the trigger is accepted (200) and the denial lands
-      // when the durable engine creates the execution — surfaced on the run, not the response.
-      const second = await hub.runManualInput({
-        rawInput: "run it again",
-        deliveryKey: "slice-3-run-2",
-        apiKey: runApiKey,
-      });
-      expect(second.status).toBe(200);
-      expect(second.triggerRunId).toBeDefined();
+    await test.step("a second code run is accepted and its child is denied by the monthly meter", async () => {
+      const second = await hub.runCodeTrigger("owner", "deploy", "slice-3-run-2");
+      expect(second.status).toBe(201);
     });
 
     await test.step("the denied run fails in organization activity", async () => {

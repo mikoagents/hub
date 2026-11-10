@@ -1,3 +1,4 @@
+import { SessionTimelines } from "./session-timelines/service.js";
 import { createHubApplication } from "./app.js";
 import type { AuthServer } from "./auth/server.js";
 import type { BillingRuntime } from "./billing/index.js";
@@ -91,6 +92,12 @@ async function createOwnedApplicationRuntime(
   const application = createHubApplication({
     database: options.database,
     entitlements: options.entitlements,
+    ...(() => {
+      const authority = registrations.find(
+        (item) => item.integration?.githubAuthority !== undefined,
+      )?.integration?.githubAuthority;
+      return authority === undefined ? {} : { githubAuthority: authority };
+    })(),
     providerFactories: registrations.flatMap((registration) => registration.triggerProviders),
     ...(executionAuthority === undefined ? {} : { executionAuthority }),
     attachmentResolvers: Object.fromEntries(
@@ -344,7 +351,17 @@ function triggerDashboardFor(
 ): TriggerDashboard | null {
   return options.database === null || options.auth === null || hub.agentValidator === null
     ? null
-    : new TriggerDashboard(options.database, options.auth, hub.agentValidator);
+    : new TriggerDashboard(
+        options.database,
+        options.auth,
+        hub.agentValidator,
+        new SessionTimelines(
+          options.database,
+          (id) => hub.connectionForDaemon(id),
+          options.completionTokenSecret,
+        ),
+        hub.triggerCode,
+      );
 }
 
 function homeDashboardFor(

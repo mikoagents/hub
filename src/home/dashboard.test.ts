@@ -12,6 +12,8 @@ import {
   TEST_DAEMON_SLUG,
 } from "../test-utils/project-configuration.js";
 import { OrganizationTriggerStore } from "../triggers/store.js";
+import { TriggerCodeService } from "../triggers/code/service.js";
+import { artifactDigest } from "../triggers/code/contract.js";
 import { HomeDashboard } from "./dashboard.js";
 
 const NOW = new Date("2026-09-21T12:00:00.000Z");
@@ -35,6 +37,55 @@ describe("home read model", () => {
     assert.deepEqual(snapshot.runs, []);
     assert.deepEqual(snapshot.unrouted, []);
     assert.equal(snapshot.windowDays, 7);
+  });
+
+  it("shows a code parent once, including non-agent runs, and keeps its internal agent children out of the overview", async () => {
+    const database = memberDatabase();
+    await enrollTestDaemon(database, "org-1");
+    const old = await new OrganizationTriggerStore(
+      database,
+      "org-1",
+      acceptingAgentValidator(),
+    ).save({ yaml: triggerYaml, userId: "user-1" });
+    await recordRun(database, old.runtimeProjectId, "code-child", "succeeded", 0, "manual.run", {
+      provider: "trigger_code",
+    });
+    const body = {
+      format: "trigger-code-v1" as const,
+      manifest: {
+        name: "manual-task",
+        runner: "local",
+        on: [{ source: "manual", event: "run" }],
+        grants: {},
+        limits: { maxRuntime: "1h" },
+      },
+      code: "export default {run(){return null}}",
+      sources: [{ path: "trigger.ts", content: "source" }],
+    };
+    const service = new TriggerCodeService(
+      database,
+      { ensure: async () => {}, cancel: async () => {}, github: async () => null },
+      () => NOW,
+    );
+    const deployed = await service.deploy("org-1", { ...body, digest: artifactDigest(body) });
+    const started = await service.receive("org-1", deployed.triggerId, {
+      id: "code-event",
+      source: "manual",
+      type: "run",
+      receivedAt: NOW.toISOString(),
+      payload: null,
+    });
+    const snapshot = await new HomeDashboard(
+      database,
+      accountAuth(),
+      APPS_CONFIGURED,
+      () => NOW,
+    ).snapshot(request, "acme");
+    assert.equal(snapshot.runs.length, 1);
+    assert.equal(snapshot.runs[0]!.id, started.run!.id);
+    assert.equal(snapshot.runs[0]!.status, "queued");
+    assert.equal(snapshot.triggers[0]!.code, true);
+    assert.equal(snapshot.triggers[0]!.event, "manual.run");
   });
 
   it("reads daemons with whether they can run agents, triggers with their event, and recent runs with the agent that ran", async () => {
@@ -227,6 +278,7 @@ async function recordRun(
   status: "succeeded" | "failed",
   ageMs: number,
   event = "manual.run",
+  triggerContext: unknown = {},
 ): Promise<void> {
   const revision = await database.findActiveProjectConfiguration(projectId);
   assert.ok(revision);
@@ -252,7 +304,7 @@ async function recordRun(
     configuredTriggerName: configured.name,
     prompt: "run it",
     inputs: {},
-    triggerContext: {},
+    triggerContext,
     outputContext: {},
     deadlineAt: new Date(NOW.getTime() + 3_600_000),
     stepIds: ["run"],

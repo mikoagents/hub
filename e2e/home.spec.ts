@@ -1,7 +1,7 @@
 import { expect } from "@playwright/test";
 import { test } from "./app.js";
 import { OrganizationHome } from "./helpers/home.js";
-import { OrganizationTriggers } from "./helpers/triggers.js";
+import { manualTriggerArtifact } from "./helpers/triggers.js";
 
 const SHOTS = "e2e/screenshots/home";
 const owner = {
@@ -21,7 +21,6 @@ test("walks a hosted organization from sign-in to its first run", async ({ hub, 
   await hub.signUpAs("owner", owner);
   await hub.createOrganization("owner", "Acme");
   const home = new OrganizationHome(page);
-  const triggers = new OrganizationTriggers(page);
 
   await test.step("a fresh organization lands on Home with every step to do", async () => {
     await home.expectOpen();
@@ -74,38 +73,25 @@ test("walks a hosted organization from sign-in to its first run", async ({ hub, 
     await home.followNudge();
   });
 
-  await test.step("the editor starts from the connected daemon, and saving completes the third step", async () => {
-    await triggers.expectDaemonPreselected(daemon);
-    await triggers.configureManual({
-      name: "deploy",
-      daemon,
-      cwd: "/workspace",
-      agent: "codex/gpt-5.4",
-      mode: "full-access",
-      thinking: "high",
-      prompt: "${{ paseo.prompt }}",
-    });
-    await triggers.save("deploy");
+  await test.step("deploying code to the connected daemon completes the third step", async () => {
+    await expect(
+      page.getByText("paseo-hub trigger init my-trigger", { exact: false }),
+    ).toBeVisible();
+    await hub.deployCodeTrigger("owner", manualTriggerArtifact("deploy", daemon));
     await home.open();
     await home.expectStep("Create a trigger", "Done");
     await home.expectStep("Run it", "To do");
-    await home.expectStep("Run it", "POST /api/v1/manual-runs");
+    await home.expectStep("Run it", "paseo-hub trigger run deploy");
     await home.expectProgress("3 of 4 done");
   });
 
   await test.step("the first run completes the list, which collapses and stays toggleable", async () => {
-    const apiKey = await hub.createRunApiKey("owner");
-    const run = await hub.runManualInput({
-      rawInput: "run it",
-      deliveryKey: "home-first-run",
-      apiKey,
-    });
-    expect(run.workflowStatus).toBe("running");
-    await home.open();
+    await hub.runCodeTrigger("owner", "deploy", "home-first-run");
+    await home.reload();
     await home.expectProgress("4 of 4 done");
     await home.expectCollapsed();
     await home.expectRuns(1, "0 succeeded · 0 failed");
-    await home.expectRecentRun("deploy", "Running");
+    await home.expectRecentRun("deploy", "Waiting");
     await home.capture(`${SHOTS}/04-complete.png`);
     await home.toggle();
     await home.expectExpanded();

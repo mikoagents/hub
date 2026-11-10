@@ -114,36 +114,43 @@ Compose builds the fork image from this checkout. The accepted daemon commit and
 See the [self-hosting guide](https://paseo.sh/docs/hub/self-hosting) for production deployment details.
 For Linear setup and workflows, see the public [Linear app](https://paseo.sh/docs/hub/self-hosting/linear-app) and [Linear triggers](https://paseo.sh/docs/hub/triggers/linear) guides.
 
-## Provider options and Hub tools
+## Programmable Triggers
 
-Workflow steps may pass a JSON-compatible, provider-native `agent.options` object. Hub preserves
-the names and nesting exactly; the selected Paseo provider validates and applies them:
+Triggers are TypeScript/JavaScript projects deployed through the Hub CLI. Use ordinary code for
+conditions, loops, parallel work, npm dependencies and external APIs. The existing Triggers page
+shows read-only source and revisions, enable/disable and manual actions; Activity shows durable
+steps, results, runner logs and agent conversations.
 
-```yaml
-agent:
-  provider: codex
-  model: gpt-5.5
-  mode: full-access
-  thinkingOptionId: high
-  options:
-    sandbox_workspace_write:
-      writable_roots:
-        - /var/cache/npm
-      network_access: false
+```ts
+import { defineTrigger } from "@getpaseo/hub/triggers";
+
+export default defineTrigger({
+  name: "hello",
+  runner: "local",
+  on: [{ source: "manual", event: "run" }],
+  grants: {},
+  limits: { maxRuntime: "10m" },
+  async run(ctx) {
+    return ctx.step("handle-input", ctx.event.payload, async (input) => ({ input }));
+  },
+});
 ```
 
-Options and modes are specific to the selected provider and are not portable. New triggers require
-an explicit `mode`; `thinkingOptionId` may be omitted to use the provider default. Hub always grants
-the execution-scoped `finish_execution` tool. Conversational triggers also receive an unlimited
-event-native `reply` tool for progress and final responses. Provider or machine policy still
-controls every unrelated tool. A read-only provider configuration is defense in depth; Hub output
-authorization remains enforced by the execution MCP server.
+Hub coordinates events, schedules and durable journals. A separate trusted runner executes code;
+agents continue through the native Miko execution protocol and completion/output contracts.
+Provider-specific parameters are passed through faithfully. Explicit grants select targets,
+connections and credentials; prompts and output capabilities are authored by the workflow.
 
-## Scheduled triggers
+See [programmable Triggers](docs/programmable-triggers.md) for building/deploying a project,
+runner setup, recovery semantics, API operations and rewriting historical YAML while preserving
+identity and history. The [GitHub review example](examples/triggers/github-review) implements
+CI waits, formal Reviews, supplemental verification, bounded fixes and independent review of new
+heads entirely in Trigger code.
 
-Choose Schedule in the trigger editor to run agents daily or on selected weekdays, at one or more
-local times. See [scheduled triggers](docs/scheduled-triggers.md) for setup, YAML, timezone rules,
-and recovery behavior.
+## Scheduled Triggers
+
+Declare an explicit recurrence in `on` and combine it with manual or provider subscriptions.
+See [scheduled Triggers](docs/scheduled-triggers.md) for timezone and recovery behavior.
 
 ## Public API
 

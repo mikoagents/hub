@@ -48,10 +48,14 @@ export function iterationSteps(step: AuthoredStep, limit: number): AuthoredStep[
   return Array.from({ length: limit }, (_, ordinal) => {
     const index = ordinal + 1;
     const previous = `run-${ordinal}`;
+    const continuing = Array.from(
+      { length: ordinal },
+      (_segment, prior) => `steps.run-${prior + 1}.outputs.outcome == 'continue'`,
+    ).join(" && ");
     return {
       ...step,
       id: `run-${index}`,
-      ...(ordinal === 0 ? {} : { if: `\${{ steps.${previous}.outputs.outcome == 'continue' }}` }),
+      ...(ordinal === 0 ? {} : { if: `\${{ ${continuing} }}` }),
       prompt: [
         ...step.prompt,
         {

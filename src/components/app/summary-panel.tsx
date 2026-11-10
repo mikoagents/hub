@@ -15,11 +15,14 @@ export interface SummaryRow {
 export function SummaryPanel({
   label,
   rows,
+  layout = "grid",
   className,
 }: {
   /** Identifies which summary this is, e.g. "GitHub app". */
   label: string;
   rows: readonly SummaryRow[];
+  /** Rows align facts inside an existing surface without adding another bordered panel. */
+  layout?: "grid" | "rows";
   /** Placement in a parent grid only. Never used to change how the panel looks. */
   className?: string;
 }) {
@@ -34,12 +37,21 @@ export function SummaryPanel({
       // The tracks are fitted rather than fixed at two: a panel of one fact filled half a box
       // and left the other half empty, and a panel of three left a hole under the third.
       className={cn(
-        "grid gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))]",
+        layout === "rows"
+          ? "grid min-w-0 gap-2"
+          : "grid gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))]",
         className,
       )}
     >
       {rows.map((row) => (
-        <div key={row.label} className="grid content-start gap-1 bg-card px-4 py-3">
+        <div
+          key={row.label}
+          className={
+            layout === "rows"
+              ? "grid min-w-0 content-start gap-1 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-4"
+              : "grid content-start gap-1 bg-card px-4 py-3"
+          }
+        >
           <dt className="text-xs text-muted-foreground">{row.label}</dt>
           <dd className="min-w-0 text-sm break-words">{row.value}</dd>
         </div>

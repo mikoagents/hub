@@ -1,4 +1,4 @@
-import { useQuery, type QueryKey } from "@tanstack/react-query";
+import { queryOptions, useQuery, type QueryKey } from "@tanstack/react-query";
 import { useCallback } from "react";
 import type { Result } from "../contract/respond.js";
 
@@ -16,13 +16,16 @@ class SnapshotFailure extends Error {}
  * not take existing content away; an initial failure keeps the server's message and reference.
  * Query keys still own identity: another organization or resource starts with its own snapshot.
  */
-export function useSnapshotQuery<T>(options: {
+interface SnapshotQueryOptions<T> {
   queryKey: QueryKey;
   queryFn: () => Promise<Result<T>>;
   enabled?: boolean;
   refetchInterval?: number;
-}): Snapshot<T> & { refetch: () => void; isFetching: boolean } {
-  const query = useQuery({
+  staleTime?: number;
+}
+
+export function snapshotQueryOptions<T>(options: SnapshotQueryOptions<T>) {
+  return queryOptions({
     ...options,
     queryFn: async () => {
       const result = await options.queryFn();
@@ -31,6 +34,12 @@ export function useSnapshotQuery<T>(options: {
     },
     retry: 2,
   });
+}
+
+export function useSnapshotQuery<T>(
+  options: SnapshotQueryOptions<T>,
+): Snapshot<T> & { refetch: () => void; isFetching: boolean } {
+  const query = useQuery(snapshotQueryOptions(options));
   const reload = query.refetch;
   const refetch = useCallback(() => {
     void reload();

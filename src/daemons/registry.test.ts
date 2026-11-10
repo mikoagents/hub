@@ -19,7 +19,7 @@ function rawDataToText(data: RawData): string {
 }
 
 describe("daemon socket protocol negotiation", () => {
-  it.each([undefined, "1.0.0", "2.0.0"])(
+  it.each([undefined, "1.0.0", "2.1.0"])(
     "requires the exact public protocol version %s",
     async (offered) => {
       const daemon: DaemonRecord = {
@@ -60,7 +60,7 @@ describe("daemon socket protocol negotiation", () => {
       });
       socket.on("error", () => {});
       try {
-        if (offered === "2.0.0") {
+        if (offered === "2.1.0") {
           const hello = await new Promise<unknown>((resolve, reject) => {
             socket.once("message", (data) => resolve(JSON.parse(rawDataToText(data))));
             socket.once("error", reject);

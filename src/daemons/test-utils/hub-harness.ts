@@ -1,4 +1,8 @@
-import { fixtureRequest, fixtureResponse, handleFixtureReceipt } from "./execution-fixture.js";
+import {
+  fixtureRequest,
+  fixtureResponse,
+  handleFixtureAuxiliaryRequest,
+} from "./execution-fixture.js";
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import type { IncomingMessage } from "node:http";
@@ -49,6 +53,8 @@ import { ENROLLMENT_LIFETIME_MS } from "../registration.js";
 import { createUnlimitedEntitlementsService } from "../../entitlements/test-utils.js";
 import type { TriggerProvider } from "../../triggers/index.js";
 import { ProjectConfigurationStore } from "../../configuration/store.js";
+import { OrganizationTriggerStore } from "../../triggers/store.js";
+import { acceptingAgentValidator } from "../../test-utils/agent-validator.js";
 import { createSlackAttachmentResolver } from "../../triggers/slack/attachments.js";
 import type { SlackBotClient, SlackThreadReadResult } from "../../triggers/slack/client.js";
 import { createSlackTriggerProvider } from "../../triggers/slack/provider.js";
@@ -1355,6 +1361,14 @@ export class HubHarness {
     ].join("\n");
   }
 
+  async seedHistoricalTrigger(yaml: string): Promise<void> {
+    await new OrganizationTriggerStore(
+      this.requireDatabase(),
+      HUB_ORGANIZATION_ID,
+      acceptingAgentValidator(),
+    ).save({ yaml, userId: null });
+  }
+
   async installConfiguration(input: {
     yaml: string;
     auth?: "valid" | "missing" | "wrong";
@@ -2300,7 +2314,7 @@ class TestDaemon {
       headers: {
         authorization: `Bearer ${this.credential}`,
         "x-paseo-daemon-id": this.daemonId,
-        "x-miko-execution-protocol": "2.0.0",
+        "x-miko-execution-protocol": "2.1.0",
       },
     });
     socket.on("message", (data) => this.receive(data));
@@ -2318,7 +2332,7 @@ class TestDaemon {
         headers: {
           authorization: `Bearer ${secret}`,
           "x-paseo-daemon-id": this.daemonId,
-          "x-miko-execution-protocol": "2.0.0",
+          "x-miko-execution-protocol": "2.1.0",
         },
       });
       socket.once("unexpected-response", (_request, response) => {
@@ -2608,7 +2622,7 @@ class TestDaemon {
   }
   private receive(data: RawData): void {
     const value = JSON.parse(readText(data)) as unknown;
-    if (handleFixtureReceipt(value, (frame) => this.socket?.send(frame))) return;
+    if (handleFixtureAuxiliaryRequest(value, (frame) => this.socket?.send(frame))) return;
     if (isHubHello(value)) {
       this.send({
         type: "status",

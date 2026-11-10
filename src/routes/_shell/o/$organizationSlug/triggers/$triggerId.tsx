@@ -1,12 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { TriggerEditorPanel } from "../../../../../triggers/panel.js";
+import { TriggerDetailPanel } from "../../../../../triggers/code/detail-panel.js";
+import { NewTriggerPanel } from "../../../../../triggers/code/new-panel.js";
 
 export const Route = createFileRoute("/_shell/o/$organizationSlug/triggers/$triggerId")({
-  staticData: { breadcrumb: "Trigger editor" },
-  component: TriggerEditorRoute,
+  staticData: { breadcrumb: "Trigger" },
+  component: TriggerRoute,
 });
 
-function TriggerEditorRoute() {
+function TriggerRoute() {
   const { triggerId } = Route.useParams();
-  return <TriggerEditorPanel triggerId={triggerId} />;
+  return triggerId === "new" ? (
+    <NewTriggerPanel />
+  ) : (
+    <TriggerDetailPanel key={triggerId} triggerId={triggerId} />
+  );
 }

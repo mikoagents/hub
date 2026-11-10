@@ -1042,9 +1042,10 @@ function buildStepIntent(
         : { title: renderExecutionTemplate(step.title, executionId) }),
       prompt:
         step.prompt
-          .map((block) =>
-            renderExpressionTemplate(block.kind === "text" ? block.value : block.content, context),
-          )
+          .map((block) => {
+            const text = block.kind === "text" ? block.value : block.content;
+            return step.literalPrompt === true ? text : renderExpressionTemplate(text, context);
+          })
           .join("\n") + iterationDeadlinePrompt(step.iteration, deadlineAt, step.maxRuntimeMs),
       agent,
       allowOutputs: step.allowOutputs,
@@ -1118,10 +1119,13 @@ function workflowContext(
 function stepUsesTriggerContext(
   step: CompiledProjectConfiguration["triggers"][number]["steps"][number],
 ): boolean {
-  return step.prompt.some((block) =>
-    expressionPathsInTemplate(block.kind === "text" ? block.value : block.content).some(
-      (path) => path.namespace === "paseo" && path.path === "context",
-    ),
+  return (
+    step.literalPrompt !== true &&
+    step.prompt.some((block) =>
+      expressionPathsInTemplate(block.kind === "text" ? block.value : block.content).some(
+        (path) => path.namespace === "paseo" && path.path === "context",
+      ),
+    )
   );
 }
 

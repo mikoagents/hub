@@ -8,8 +8,95 @@ import { TriggerDashboard } from "./dashboard.js";
 import { OrganizationTriggerStore } from "./store.js";
 import { compileHubBundle } from "../config/bundle.js";
 import { migrateLegacyProjectTriggers } from "./migration.js";
+import { artifactDigest } from "./code/contract.js";
+import { TriggerCodeService } from "./code/service.js";
 
 describe("trigger dashboard read model", () => {
+  it("keeps a Trigger's own history visible when another fills the organization feed", async () => {
+    const database = createMemoryDatabase({
+      memberships: [
+        {
+          userId: "user-1",
+          organizationId: "org-1",
+          organizationName: "Acme",
+          organizationSlug: "acme",
+          membershipId: "member-1",
+          role: "owner",
+        },
+      ],
+    });
+    const service = new TriggerCodeService(database, {
+      ensure: async () => {},
+      cancel: async () => {},
+      github: async () => null,
+    });
+    const project = (name: string) => {
+      const body = {
+        format: "trigger-code-v1" as const,
+        manifest: {
+          name,
+          runner: "local",
+          on: [{ source: "manual", event: "run" }],
+          grants: {},
+          limits: { maxRuntime: "10m" },
+          diagram: "flowchart LR\n A[Event] --> B[Result]",
+        },
+        code: "export default {async run(){ return null }};",
+        sources: [{ path: "trigger.ts", content: "export default {async run(){ return null }};" }],
+        entrypoint: "trigger.ts",
+      };
+      return { ...body, digest: artifactDigest(body) };
+    };
+    const quiet = await service.deploy("org-1", project("quiet"));
+    const busy = await service.deploy("org-1", project("busy"));
+    const startedAt = new Date().toISOString();
+    const first = await service.receive("org-1", quiet.triggerId, {
+      id: "quiet-first",
+      source: "manual",
+      type: "run",
+      payload: null,
+      receivedAt: startedAt,
+    });
+    for (let index = 0; index < 105; index++)
+      await service.receive("org-1", busy.triggerId, {
+        id: `busy-${index}`,
+        source: "manual",
+        type: "run",
+        payload: null,
+        receivedAt: startedAt,
+      });
+    const dashboard = new TriggerDashboard(database, accountAuth(), acceptingAgentValidator());
+    const request = new Request("https://hub.test/o/acme/triggers");
+    const history = await dashboard.triggerHistory(request, "acme", quiet.triggerId);
+    assert.deepEqual(
+      history.map((run) => run.id),
+      [first.run?.id],
+    );
+    const snapshot = await dashboard.snapshot(request, "acme");
+    assert.equal(
+      snapshot.triggers.find((trigger) => trigger.id === quiet.triggerId)?.lastTriggered?.status,
+      "queued",
+    );
+    assert.equal((await dashboard.triggerHistory(request, "acme", busy.triggerId)).length, 100);
+    assert.equal(
+      (await dashboard.codeDetail(request, "acme", quiet.triggerId)).artifact?.entrypoint,
+      "trigger.ts",
+    );
+    assert.match(
+      (await dashboard.codeDetail(request, "acme", quiet.triggerId)).artifact?.manifest.diagram ??
+        "",
+      /A\[Event\]/u,
+    );
+    await assert.rejects(
+      dashboard.triggerHistory(request, "acme", "another-trigger"),
+      /run_unavailable/u,
+    );
+    await assert.rejects(
+      dashboard.triggerHistory(request, "other-org", quiet.triggerId),
+      /tenant route not found/u,
+    );
+  });
+
   it("describes the provider and latest run on the organization trigger list", async () => {
     const database = createMemoryDatabase({
       memberships: [
@@ -115,6 +202,15 @@ describe("trigger dashboard read model", () => {
       execution.id,
     );
 
+    await assert.rejects(
+      dashboard.activityRunTimeline(request, { ...scope, executionId: "unrelated-execution" }),
+      /run_unavailable/u,
+    );
+    assert.equal(
+      (await dashboard.activityRunTimeline(request, { ...scope, executionId: execution.id }))
+        .sessionId,
+      null,
+    );
     const other = await new OrganizationTriggerStore(
       database,
       "org-1",
@@ -227,6 +323,11 @@ describe("trigger dashboard read model", () => {
       dashboard.activityRunSnapshot(request, { ...scope, triggerId: second.id }),
       /run_unavailable/u,
     );
+    assert.deepEqual(
+      (await dashboard.triggerHistory(request, "acme", first.id)).map((run) => run.id),
+      [created.run.id],
+    );
+    assert.deepEqual(await dashboard.triggerHistory(request, "acme", second.id), []);
   });
 });
 

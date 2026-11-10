@@ -156,7 +156,7 @@ export type HubProviderSnapshot = z.infer<typeof ProviderSnapshotSchema>;
 export type HubProviderSnapshotEntry = z.infer<typeof ProviderSnapshotEntrySchema>;
 
 // This protocol is versioned independently of Paseo's native session protocol.
-export const EXECUTION_PROTOCOL_VERSION = "2.0.0" as const;
+export const EXECUTION_PROTOCOL_VERSION = "2.1.0" as const;
 export const EXECUTION_PROTOCOL_HEADER = "x-miko-execution-protocol";
 export const AgentSnapshotSchema = z.object({
   id: z.string(),
@@ -181,6 +181,46 @@ export const AgentEventSchema = z.discriminatedUnion("type", [
   }),
 ]);
 export type AgentEvent = z.infer<typeof AgentEventSchema>;
+export const TimelineCursorSchema = z
+  .object({ epoch: z.string().min(1), seq: z.number().int().nonnegative() })
+  .strict();
+export const TimelineOptionsSchema = z
+  .object({
+    direction: z.enum(["tail", "before", "after"]).default("tail"),
+    cursor: TimelineCursorSchema.optional(),
+    limit: z.number().int().min(1).max(200).default(100),
+  })
+  .strict();
+export const TimelineRowSchema = z.object({
+  seq: z.number().int().positive(),
+  timestamp: z.string(),
+  turnId: z.string().optional(),
+  item: z.record(z.string(), JsonValueSchema),
+});
+export const TimelinePageSchema = z.object({
+  epoch: z.string(),
+  rows: z.array(TimelineRowSchema).max(200),
+  hasOlder: z.boolean(),
+  hasNewer: z.boolean(),
+  reset: z.boolean(),
+  window: z.object({
+    minSeq: z.number().int(),
+    maxSeq: z.number().int(),
+    nextSeq: z.number().int(),
+  }),
+  agent: z.object({
+    nativeAgentId: z.string(),
+    provider: z.string(),
+    providerSessionId: z.string().nullable(),
+    status: AgentStatusSchema,
+    cwd: z.string(),
+    model: z.string().nullable(),
+    details: z.record(z.string(), JsonValueSchema).optional(),
+  }),
+});
+export type TimelineOptions = z.input<typeof TimelineOptionsSchema>;
+export type TimelinePage = z.infer<typeof TimelinePageSchema>;
+
 export const CreateOptionsSchema = z
   .object({
     provider: z.string(),
@@ -263,6 +303,10 @@ export const RequestSchema = z.discriminatedUnion("operation", [
     input: z.object({ key: z.string().min(1), options: CreateOptionsSchema }).strict(),
   }),
   RequestEnvelopeSchema.extend({ operation: z.literal("get"), input: ReadInputSchema }),
+  RequestEnvelopeSchema.extend({
+    operation: z.literal("timeline"),
+    input: ReadInputSchema.extend(TimelineOptionsSchema.shape).strict(),
+  }),
   RequestEnvelopeSchema.extend({
     operation: z.literal("submit"),
     input: ReadInputSchema.extend({ messageId: z.string().min(1), text: z.string() }),

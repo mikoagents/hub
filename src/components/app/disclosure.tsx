@@ -1,4 +1,4 @@
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { cn } from "../../lib/utils.js";
@@ -20,7 +20,9 @@ export function Disclosure({
   media,
   title,
   description,
+  detail,
   status,
+  variant = "section",
   children,
 }: {
   id: string;
@@ -30,8 +32,12 @@ export function Disclosure({
   media?: ReactNode;
   title: string;
   description?: string;
-  /** The single status indicator, rendered before the chevron. */
+  /** Extra facts visible while a summary row is collapsed. */
+  detail?: string;
+  /** The single status indicator; file headers keep it beside the name. */
   status?: ReactNode;
+  /** File headers identify source; summary rows fit inside a parent card. */
+  variant?: "section" | "file" | "row";
   children: ReactNode;
 }) {
   const headerId = `${id}-header`;
@@ -46,55 +52,98 @@ export function Disclosure({
     <Collapsible
       open={open}
       onOpenChange={onOpenChange}
-      className="min-w-0 rounded-xl border bg-card"
+      className={variant === "row" ? "min-w-0" : "min-w-0 rounded-xl border bg-card"}
       data-provider={id}
     >
       <CollapsibleTrigger
         id={headerId}
         aria-controls={bodyId}
         className={cn(
-          "grid w-full items-center gap-x-3 gap-y-1 rounded-xl px-4 py-3 text-left sm:flex sm:gap-3",
-          compact.columns,
-          "hover:bg-accent",
+          "w-full items-center text-left hover:bg-accent",
+          variant === "row" ? "flex gap-3 rounded-md py-3" : "rounded-xl px-4 py-3",
+          variant === "file" || variant === "row"
+            ? "flex gap-3"
+            : cn("grid gap-x-3 gap-y-1 sm:flex sm:gap-3", compact.columns),
         )}
       >
-        {media === undefined ? null : (
-          <span aria-hidden="true" className="flex shrink-0 items-center">
-            {media}
-          </span>
-        )}
-        <span className="contents sm:grid sm:min-w-0 sm:flex-1 sm:gap-0.5">
-          <span
-            className={cn("row-start-1 truncate text-sm sm:col-auto sm:row-auto", compact.title)}
-          >
-            {title}
-          </span>
-          {description === undefined ? null : (
-            <span
-              className={cn(
-                "row-start-2 text-sm text-muted-foreground sm:col-auto sm:row-auto",
-                compact.full,
-              )}
-            >
-              {description}
+        {variant === "row" ? (
+          <>
+            <span className="grid min-w-0 flex-1 gap-0.5 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-center sm:gap-4">
+              <span className="text-xs text-muted-foreground">{title}</span>
+              <span className="grid min-w-0 gap-1">
+                {/* A summary of several subscriptions is one line each. Pre-line keeps those
+                    breaks; a single-line summary is unchanged. */}
+                <span className="text-sm break-words whitespace-pre-line">{description}</span>
+                {detail === undefined ? null : (
+                  <span className="text-xs break-words text-muted-foreground">{detail}</span>
+                )}
+              </span>
             </span>
-          )}
-        </span>
-        <span className="contents sm:flex sm:shrink-0 sm:items-center sm:gap-2">
-          <span
-            className={cn("row-start-3 justify-self-start sm:col-auto sm:row-auto", compact.full)}
-          >
+            <ChevronDown
+              aria-hidden="true"
+              className={cn("size-4 shrink-0 text-muted-foreground", open && "rotate-180")}
+            />
+          </>
+        ) : null}
+        {variant === "file" ? (
+          <>
+            <ChevronRight
+              aria-hidden="true"
+              className={cn("size-4 shrink-0 text-muted-foreground", open && "rotate-90")}
+            />
+            <span className="min-w-0 truncate font-mono text-sm" title={title}>
+              {title}
+            </span>
             {status}
-          </span>
-          <ChevronDown
-            aria-hidden="true"
-            className={cn(
-              "row-start-1 size-4 text-muted-foreground transition-transform sm:col-auto sm:row-auto",
-              compact.chevron,
-              open ? "rotate-180" : "",
+          </>
+        ) : null}
+        {variant === "section" ? (
+          <>
+            {media === undefined ? null : (
+              <span aria-hidden="true" className="flex shrink-0 items-center">
+                {media}
+              </span>
             )}
-          />
-        </span>
+            <span className="contents sm:grid sm:min-w-0 sm:flex-1 sm:gap-0.5">
+              <span
+                className={cn(
+                  "row-start-1 truncate text-sm sm:col-auto sm:row-auto",
+                  compact.title,
+                )}
+              >
+                {title}
+              </span>
+              {description === undefined ? null : (
+                <span
+                  className={cn(
+                    "row-start-2 text-sm text-muted-foreground sm:col-auto sm:row-auto",
+                    compact.full,
+                  )}
+                >
+                  {description}
+                </span>
+              )}
+            </span>
+            <span className="contents sm:flex sm:shrink-0 sm:items-center sm:gap-2">
+              <span
+                className={cn(
+                  "row-start-3 justify-self-start sm:col-auto sm:row-auto",
+                  compact.full,
+                )}
+              >
+                {status}
+              </span>
+              <ChevronDown
+                aria-hidden="true"
+                className={cn(
+                  "row-start-1 size-4 text-muted-foreground transition-transform sm:col-auto sm:row-auto",
+                  compact.chevron,
+                  open ? "rotate-180" : "",
+                )}
+              />
+            </span>
+          </>
+        ) : null}
       </CollapsibleTrigger>
       {/* `forceMount` keeps the body in the DOM but stops Radix hiding it, so the closed state
           is ours to apply. `display: none` is what removes it from the page, the accessibility
@@ -104,7 +153,10 @@ export function Disclosure({
         id={bodyId}
         role="region"
         aria-labelledby={headerId}
-        className="min-w-0 overflow-hidden border-t px-4 py-4 data-[state=closed]:hidden"
+        className={cn(
+          "min-w-0 overflow-hidden data-[state=closed]:hidden",
+          variant === "row" ? "pt-2 pb-4" : "border-t px-4 py-4",
+        )}
       >
         {children}
       </CollapsibleContent>

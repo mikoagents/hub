@@ -1,3 +1,4 @@
+import { isolatedProcessEnvironment } from "../../test-utils/isolated-environment.js";
 import { spawn, execFile, type ChildProcess } from "node:child_process";
 import { createConnection, createServer as createNetServer } from "node:net";
 import { rmSync } from "node:fs";
@@ -396,7 +397,7 @@ function removeWhenTheProcessExits(directory: string): void {
 
 export function sourceEnvironment(paseoHome: string): NodeJS.ProcessEnv {
   return {
-    ...process.env,
+    ...isolatedProcessEnvironment(),
     PASEO_AGENT_ID: undefined,
     PASEO_WORKSPACE_ID: undefined,
     MIKO_HOME: paseoHome,

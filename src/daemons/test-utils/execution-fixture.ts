@@ -88,9 +88,39 @@ function bind(value: unknown) {
   };
 }
 
-export function handleFixtureReceipt(value: unknown, send: (frame: string) => void): boolean {
+export function handleFixtureAuxiliaryRequest(
+  value: unknown,
+  send: (frame: string) => void,
+): boolean {
   const request = RequestSchema.safeParse(value);
   if (!request.success) return false;
+  if (request.data.operation === "timeline") {
+    const agentId = request.data.input.agentId;
+    send(
+      JSON.stringify({
+        type: "miko.response",
+        version,
+        requestId: request.data.requestId,
+        result: {
+          epoch: `fixture:${agentId}`,
+          rows: [],
+          hasOlder: false,
+          hasNewer: false,
+          reset: false,
+          window: { minSeq: 0, maxSeq: 0, nextSeq: 1 },
+          agent: {
+            nativeAgentId: agentId,
+            provider: "codex",
+            providerSessionId: null,
+            status: "idle",
+            cwd: "/test",
+            model: null,
+          },
+        },
+      }),
+    );
+    return true;
+  }
   if (request.data.operation !== "receipt") return false;
   send(
     JSON.stringify({

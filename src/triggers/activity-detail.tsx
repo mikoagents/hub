@@ -2,7 +2,7 @@
 import { useCallback, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { CodeBlock, CopyButton } from "../components/app/copy-field.js";
-import { Card } from "../components/app/card.js";
+import { Combobox } from "../components/app/combobox.js";
 import { Disclosure } from "../components/app/disclosure.js";
 import { EmptyState } from "../components/app/empty-state.js";
 import { FailureAlert } from "../components/app/failure-alert.js";
@@ -13,7 +13,12 @@ import { StatusPill, statusLabel } from "../components/app/status-pill.js";
 import { SummaryPanel } from "../components/app/summary-panel.js";
 import { Button } from "../components/ui/button.js";
 import { useSnapshotQuery } from "../queries/index.js";
-import { triggerActivitySnapshot, triggerActivityLogs } from "./functions.js";
+import {
+  triggerActivitySnapshot,
+  triggerActivityLogs,
+  type TriggerActivitySnapshot,
+} from "./functions.js";
+import { SessionHistory } from "./session-history.js";
 
 interface ActivityScope {
   organizationSlug: string;
@@ -21,9 +26,18 @@ interface ActivityScope {
   runId: string;
 }
 
-export function ActivityDetail(scope: ActivityScope) {
+type Activity = TriggerActivitySnapshot["activity"];
+
+export const ACTIVITY_VIEWS = [
+  { value: "conversation", label: "Conversation" },
+  { value: "details", label: "Run details" },
+  { value: "diagnostics", label: "Diagnostics" },
+];
+
+export function ActivityDetail({ view, ...scope }: ActivityScope & { view: string }) {
   const load = useServerFn(triggerActivitySnapshot);
-  const [contextOpen, setContextOpen] = useState(false);
+  const [selectedStep, setSelectedStep] = useState<string | null>(null);
+  const selectStep = useCallback((option: { value: string }) => setSelectedStep(option.value), []);
   const snapshot = useSnapshotQuery({
     queryKey: ["trigger-activity", scope.organizationSlug, scope.triggerId, scope.runId],
     queryFn: () => load({ data: scope }),
@@ -40,82 +54,114 @@ export function ActivityDetail(scope: ActivityScope) {
       />
     );
   const activity = snapshot.data.activity;
+  const step =
+    activity.steps.find((entry) => entry.id === selectedStep) ??
+    activity.steps.find((entry) => entry.status === "running") ??
+    lastStartedStep(activity.steps);
   return (
-    <>
-      <Section title="Overview">
-        <SummaryPanel
-          label="Run overview"
-          rows={[
-            { label: "Status", value: <RunStatus status={activity.status} /> },
-            { label: "Source", value: `${activity.provider} · ${activity.source}` },
-            { label: "Received", value: <RelativeTime value={activity.receivedAt} /> },
-            { label: "Started", value: <RelativeTime value={activity.createdAt} /> },
-            {
-              label: "Completed",
-              value:
-                activity.completedAt === null ? "—" : <RelativeTime value={activity.completedAt} />,
-            },
-            { label: "Failure reason", value: activity.failureReason ?? "—" },
-          ]}
+    <div className="grid min-w-0 gap-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <RunStatus status={activity.status} />
+        <span className="text-xs text-muted-foreground">
+          Received <RelativeTime value={activity.receivedAt} />
+        </span>
+      </div>
+      {activity.failureReason === null ? null : (
+        <FailureAlert
+          title="Run failed"
+          error={activity.failureReason}
+          fallback="This run failed."
         />
-      </Section>
-      <Section title="Prompt" action={<CopyButton label="prompt" value={activity.prompt} />}>
-        <CodeBlock label="Run prompt">{activity.prompt}</CodeBlock>
-      </Section>
+      )}
+      {view === "details" ? (
+        <RunDetails activity={activity} />
+      ) : (
+        <>
+          {activity.steps.length <= 1 ? null : (
+            <Combobox
+              id={`activity-step-${activity.id}`}
+              label="Execution step"
+              value={step?.id ?? ""}
+              options={activity.steps.map((entry) => ({
+                value: entry.id,
+                label: `${String(entry.ordinal + 1)}. ${entry.stepId}`,
+                detail: statusLabel(entry.status),
+              }))}
+              onChange={selectStep}
+              placeholder="Select a step"
+              empty="No steps found."
+            />
+          )}
+          {step?.executionId == null ? (
+            <EmptyState
+              title="No agent session"
+              description="This step has not started an agent. Run details contain its status and output."
+            />
+          ) : (
+            <div key={step.executionId} className="min-w-0">
+              <SessionHistory
+                {...scope}
+                executionId={step.executionId}
+                running={activity.status === "running"}
+                view={view}
+              />
+              {view === "diagnostics" ? (
+                <ExecutionLog
+                  {...scope}
+                  executionId={step.executionId}
+                  running={activity.status === "running"}
+                />
+              ) : null}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function lastStartedStep(steps: Activity["steps"]) {
+  for (let index = steps.length - 1; index >= 0; index--) {
+    const step = steps[index];
+    if (step?.executionId != null) return step;
+  }
+  return steps[0];
+}
+
+function RunDetails({ activity }: { activity: Activity }) {
+  const [promptOpen, setPromptOpen] = useState(false);
+  const [contextOpen, setContextOpen] = useState(false);
+  return (
+    <div className="grid min-w-0 gap-5">
+      <SummaryPanel
+        label="Run overview"
+        rows={[
+          { label: "Source", value: `${activity.provider} · ${activity.source}` },
+          { label: "Started", value: <RelativeTime value={activity.createdAt} /> },
+          {
+            label: "Completed",
+            value:
+              activity.completedAt === null ? "—" : <RelativeTime value={activity.completedAt} />,
+          },
+        ]}
+      />
+      <Disclosure
+        id={`run-prompt-${activity.id}`}
+        title="Prompt"
+        open={promptOpen}
+        onOpenChange={setPromptOpen}
+      >
+        <Section title="Run prompt" action={<CopyButton label="prompt" value={activity.prompt} />}>
+          <CodeBlock label="Run prompt">{activity.prompt}</CodeBlock>
+        </Section>
+      </Disclosure>
       <Section title="Steps">
         {activity.steps.length === 0 ? (
           <EmptyState title="No steps" />
         ) : (
-          <div className="grid gap-4">
+          <div className="grid gap-3">
             {activity.steps.map((step) => (
-              <Card
-                key={step.id}
-                title={`${String(step.ordinal + 1)}. ${step.stepId}`}
-                action={<RunStatus status={step.status} />}
-              >
-                <SummaryPanel
-                  label={`${step.stepId} details`}
-                  rows={[
-                    {
-                      label: "Started",
-                      value:
-                        step.startedAt === null ? "—" : <RelativeTime value={step.startedAt} />,
-                    },
-                    {
-                      label: "Completed",
-                      value:
-                        step.completedAt === null ? "—" : <RelativeTime value={step.completedAt} />,
-                    },
-                    {
-                      label: "Agent",
-                      value:
-                        step.agentId === null ? (
-                          "—"
-                        ) : (
-                          <span className="font-mono text-xs break-all">{step.agentId}</span>
-                        ),
-                    },
-                    { label: "Failure reason", value: step.failureReason ?? "—" },
-                  ]}
-                />
-                {step.output === null ? null : (
-                  <Section title="Structured output">
-                    <CodeBlock label={`${step.stepId} output`}>{json(step.output)}</CodeBlock>
-                  </Section>
-                )}
-                {step.executionId === null ? (
-                  <EmptyState
-                    title="No execution log"
-                    description="This step has not started an agent."
-                  />
-                ) : (
-                  <ExecutionLog
-                    {...scope}
-                    executionId={step.executionId}
-                    running={activity.status === "running"}
-                  />
-                )}
-              </Card>
+              <StepDetails key={step.id} step={step} />
             ))}
           </div>
         )}
@@ -126,19 +172,21 @@ export function ActivityDetail(scope: ActivityScope) {
         open={contextOpen}
         onOpenChange={setContextOpen}
       >
-        <SummaryPanel
-          label="Run evidence"
-          rows={[
-            {
-              label: "Run ID",
-              value: <span className="font-mono text-xs break-all">{activity.id}</span>,
-            },
-            {
-              label: "Delivery ID",
-              value: <span className="font-mono text-xs break-all">{activity.deliveryId}</span>,
-            },
-          ]}
-        />
+        <Section>
+          <SummaryPanel
+            label="Run evidence"
+            rows={[
+              {
+                label: "Run ID",
+                value: <span className="font-mono text-xs break-all">{activity.id}</span>,
+              },
+              {
+                label: "Delivery ID",
+                value: <span className="font-mono text-xs break-all">{activity.deliveryId}</span>,
+              },
+            ]}
+          />
+        </Section>
         <Section title="Inputs">
           <CodeBlock label="Run inputs">{json(activity.inputs)}</CodeBlock>
         </Section>
@@ -155,7 +203,57 @@ export function ActivityDetail(scope: ActivityScope) {
           <CodeBlock label="Event payload">{json(activity.rawPayload)}</CodeBlock>
         </Section>
       </Disclosure>
-    </>
+    </div>
+  );
+}
+
+function StepDetails({ step }: { step: Activity["steps"][number] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Disclosure
+      id={`step-${step.id}`}
+      title={`${String(step.ordinal + 1)}. ${step.stepId}`}
+      open={open}
+      onOpenChange={setOpen}
+      status={<RunStatus status={step.status} />}
+    >
+      <div className="grid gap-4">
+        <SummaryPanel
+          label={`${step.stepId} details`}
+          rows={[
+            {
+              label: "Started",
+              value: step.startedAt === null ? "—" : <RelativeTime value={step.startedAt} />,
+            },
+            {
+              label: "Completed",
+              value: step.completedAt === null ? "—" : <RelativeTime value={step.completedAt} />,
+            },
+            {
+              label: "Agent",
+              value:
+                step.agentId === null ? (
+                  "—"
+                ) : (
+                  <span className="font-mono text-xs break-all">{step.agentId}</span>
+                ),
+            },
+          ]}
+        />
+        {step.failureReason === null ? null : (
+          <FailureAlert
+            title="Step failed"
+            error={step.failureReason}
+            fallback="This step failed."
+          />
+        )}
+        {step.output === null ? null : (
+          <Section title="Structured output">
+            <CodeBlock label={`${step.stepId} output`}>{json(step.output)}</CodeBlock>
+          </Section>
+        )}
+      </div>
+    </Disclosure>
   );
 }
 

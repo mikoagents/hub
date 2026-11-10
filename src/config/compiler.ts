@@ -249,6 +249,8 @@ export interface CompiledInput {
 }
 
 export interface CompiledStep {
+  /** Code-authored prompts are bytes, not legacy expression templates. */
+  literalPrompt?: boolean | undefined;
   iteration?: Iteration | undefined;
   continuation?: import("../triggers/continuation.js").Continuation | undefined;
   id: string;
@@ -403,6 +405,7 @@ const CompiledJsonSchemaSchema = z.custom<JsonValue>(
 
 const CompiledStepSchema: z.ZodType<CompiledStep> = z
   .object({
+    literalPrompt: z.boolean().optional(),
     iteration: IterationSchema.optional(),
     continuation: ContinuationSchema.optional(),
     id: z.string().regex(IDENTIFIER),
@@ -896,7 +899,7 @@ function validateExpressionContract(
         }
       });
     }
-    for (const [index, block] of step.prompt.entries()) {
+    for (const [index, block] of (step.literalPrompt === true ? [] : step.prompt).entries()) {
       compileAt(["triggers", triggerName, "steps", step.id, "prompt", index], () =>
         validateTemplate(
           block.kind === "text" ? block.value : block.content,

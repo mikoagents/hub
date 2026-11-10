@@ -7,6 +7,7 @@ import { usePresentedDestination } from "../navigation/index.js";
 import {
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -22,42 +23,57 @@ export interface NavigationItem {
   subtree?: boolean;
 }
 
+export interface NavigationSection {
+  label?: string;
+  items: readonly NavigationItem[];
+}
+
 /**
- * The destinations for one level of the app, and only those. A group that is not the outermost
- * level leads with its way back out, set apart by a rule — going up is not a sibling of going
- * across, and putting it in the same list would make it look like one.
+ * One navigation landmark per scope, with quiet labels grouping related destinations. Going
+ * up stays separate from going across, so the way back precedes every section.
  */
 export function NavigationGroup({
   label,
   back,
-  items,
+  sections,
 }: {
   /** Names the level, e.g. "Organization". Becomes the landmark's accessible name. */
   label: string;
   back?: NavigationItem;
-  items: readonly NavigationItem[];
+  sections: readonly NavigationSection[];
 }) {
   return (
     <nav aria-label={label}>
-      <SidebarGroup>
-        {back === undefined ? null : (
-          <>
+      {back === undefined ? null : (
+        <>
+          <SidebarGroup>
             <SidebarGroupContent>
               <SidebarMenu>
                 <NavItem item={back} />
               </SidebarMenu>
             </SidebarGroupContent>
-            <SidebarSeparator className="my-2" />
-          </>
-        )}
-        <SidebarGroupContent>
-          <SidebarMenu>
-            {items.map((item) => (
-              <NavItem key={item.to} item={item} />
-            ))}
-          </SidebarMenu>
-        </SidebarGroupContent>
-      </SidebarGroup>
+          </SidebarGroup>
+          <SidebarSeparator />
+        </>
+      )}
+      {sections.map((section) => (
+        <SidebarGroup
+          key={section.label ?? section.items[0]?.to}
+          role={section.label === undefined ? undefined : "group"}
+          aria-label={section.label}
+        >
+          {section.label === undefined ? null : (
+            <SidebarGroupLabel>{section.label}</SidebarGroupLabel>
+          )}
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {section.items.map((item) => (
+                <NavItem key={item.to} item={item} />
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      ))}
     </nav>
   );
 }

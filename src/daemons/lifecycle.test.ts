@@ -134,6 +134,9 @@ describe("durable Hub action acknowledgement state", () => {
         status: "idle" as const,
       };
       const agents: AgentConnection = {
+        timeline: async () => {
+          throw new Error("not used");
+        },
         create: async () => {
           creates++;
           return agent;
@@ -496,6 +499,9 @@ function createLifecycle(
 
 class AcknowledgementConnection implements DaemonConnection {
   readonly agents: AgentConnection = {
+    timeline: async () => {
+      throw new Error("not used");
+    },
     create: async () => {
       throw new Error("not used");
     },

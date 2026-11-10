@@ -51,6 +51,15 @@ describeHubE2E("Paseo Hub cross-repository contract", () => {
     await hub.completedCapabilityRun(separate.executionId);
   }, 120_000);
 
+  it("deploys a code Trigger through the built CLI and executes its loop through an independent runner and source-built Miko", async () => {
+    await hub.connect();
+    await hub.daemonIsConnected();
+    const result = await hub.runProgrammableTrigger();
+    assert.equal(result.status, "succeeded");
+    assert.equal(result.agents, 2);
+    assert.deepEqual(result.journal, ["agent", "sleep", "agent"]);
+  }, 120_000);
+
   it("connects the source-built daemon through an enrollment token", async () => {
     const enrollment = await hub.connect();
     await hub.daemonIsConnected();
@@ -79,6 +88,10 @@ describeHubE2E("Paseo Hub cross-repository contract", () => {
     assert.equal(completed.status, "succeeded");
     const session = await hub.sessionEvidence(run.executionId);
     assert.equal(session.agentId, run.agentId);
+    const transcript = await hub.sessionTranscript(run.executionId);
+    assert.ok(
+      transcript.some((row) => row.item["type"] === "user_message" && row.item["text"] === prompt),
+    );
   }, 120_000);
 
   it("validates and installs the exact authored bundle through the source-built CLI", async () => {

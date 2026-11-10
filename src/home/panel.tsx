@@ -400,7 +400,15 @@ function runStep(
 function runHint(triggers: HomeSnapshot["triggers"]): string {
   if (triggers.length === 0) return "Once a trigger exists, fire its event.";
   const hints = new Set<string>();
-  for (const { event } of triggers) {
+  for (const { name, event, code } of triggers) {
+    if (code) {
+      hints.add(
+        event === "manual.run"
+          ? `Run it from Triggers or use paseo-hub trigger run ${name}.`
+          : "It runs when its subscribed events arrive; inspect its source in Triggers.",
+      );
+      continue;
+    }
     const provider = event.split(".")[0];
     if (provider === "slack" || provider === "discord") {
       hints.add("Mention the bot in a channel it can see.");

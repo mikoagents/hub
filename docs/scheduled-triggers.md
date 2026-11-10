@@ -1,148 +1,60 @@
-# Scheduled triggers
+# Scheduled Triggers
 
-Choose **Schedule** under **When this happens** in a new organization trigger. Choose **Every
-minute**, **Every hour**, **Every day**, or **Every week**. Each preset means exactly that frequency;
-there is no second interval setting. Daily and weekly schedules accept one or more times. Weekly
-schedules also select days of the week. Choose a timezone for those times.
+Schedules are declared in a [Trigger code project](programmable-triggers.md), alongside optional
+manual, custom and provider entries. One Trigger can declare one recurrence:
 
-Author custom intervals and calendar rules in YAML. When a rule has no matching preset, the form
-shows a **Custom schedule** rule field with its start and timezone. You can edit the rule there;
-changes to other execution settings preserve it exactly.
+```ts
+import { defineTrigger } from "@getpaseo/hub/triggers";
 
-Then choose the daemon, working directory, provider/model, execution mode, thinking, and instructions
-as usual. GitHub access uses the same connection, repository, permission, and duration controls as
-other triggers. Hub mints the existing scoped installation token for each execution; a schedule
-requires no stored bot token. Save the trigger to enable its next future occurrence. The form and
-trigger list summarize the selected recurrence, and the YAML view preserves it when you edit/save.
-Choose **New agent** continuity when using temporary GitHub access, as with other triggers.
-
-## YAML and API
-
-Scheduling uses the existing standalone trigger validation, installation and listing APIs. For
-example, submit this document as the `yaml` field to `POST /api/v1/triggers/validate` and
-`POST /api/v1/triggers/install`. Installing again replaces the trigger with the same name:
-
-```yaml
-name: periodic-review
-enabled: true
-on:
-  schedule.tick:
-    recurrence:
-      start: "2026-09-09T09:00:00"
-      rule: "FREQ=DAILY;BYHOUR=9,17"
-      timezone: Europe/Berlin
-run:
-  target:
-    daemon: your-daemon
-    cwd: /workspace/project
-  agent:
-    provider: codex
-    mode: full-access
-  prompt: |
-    Review new reports and summarize items that need attention.
-    Scheduling context: ${{ paseo.context }}
-  max_runtime: 2h
-  idle_timeout: 10m
-  auto_archive: true
-  background: true
+export default defineTrigger({
+  name: "daily-scan",
+  runner: "local",
+  on: [
+    {
+      source: "schedule",
+      event: "tick",
+      recurrence: {
+        start: "2026-01-01T09:00:00",
+        timezone: "Europe/Berlin",
+        rule: "FREQ=DAILY;BYHOUR=9,17",
+      },
+    },
+    { source: "manual", event: "run" },
+  ],
+  grants: {},
+  limits: { maxRuntime: "30m" },
+  async run(ctx) {
+    return ctx.withLock("scan", "daily-scan", async () => {
+      await ctx.log("Scan started", ctx.event.payload);
+      // Declare explicit target grants and agent options here when a scan needs an agent.
+      return { scheduledAt: ctx.event.receivedAt };
+    });
+  },
+});
 ```
 
-The run block also controls the execution workspace:
+`start` is a local wall-clock date/time without an offset. `timezone` must be an IANA timezone;
+`rule` is one supported RFC 5545 RRULE. The existing recurrence validator supports intervals,
+BYDAY/BYHOUR/BYMINUTE and the other supported calendar selectors, with finite COUNT or UNTIL.
+Invalid combinations and timezone names are rejected during `trigger check` and deployment.
+COUNT is bounded to 1–10,000; use COUNT or UNTIL, never both. DST follows the existing recurrence
+evaluator's wall-clock handling. A schedule subscription must match `tick`.
 
-- `run.auto_archive` defaults to `true` and archives the workspace after execution.
-- `run.background` defaults to `false`. Set it to `true` in YAML to create a Paseo background
-  workspace, hidden from workspace listings unless the client requests background workspaces.
-  This is independent of archiving. Hub always passes the field through. Older daemons without
-  `backgroundWorkspaces` support ignore it: the run proceeds with a visible workspace.
-  Changing this setting for an existing continuation requires a new agent or a different
-  continuation key.
+Hub's clock durably creates the run and advances its cursor in **one transaction**. After downtime,
+one missed occurrence is coalesced into a catch-up run and the next occurrence moves beyond the
+current time. An exhausted finite rule remains exhausted across restarts. Editing code without
+changing the recurrence preserves its cursor. Changing the recurrence establishes a new cursor
+using the Trigger's creation time; it can therefore produce a catch-up occurrence.
 
-The persisted recurrence has three fields: `start` is a quoted local date-time with seconds and
-no offset; `timezone` gives that clock's IANA timezone; `rule` is one RFC 5545 RRULE value, without
-the `RRULE:` prefix. The anchor determines interval alignment and omitted calendar/time fields.
-It is a lower bound, not an extra occurrence inserted outside the rule.
+Code runs are independently durable; overlapping runs are allowed. Declare `ctx.withLock` when
+only one scan should proceed at a time, or use a claim and skip policy for other overlap behavior.
+The Trigger's `limits.maxRuntime` begins at intake and includes time spent queued or waiting.
+Disabling a Trigger stops future scheduled intake without canceling accepted work. Re-enabling
+can coalesce a missed occurrence. Cancel accepted runs explicitly when needed.
 
-These rules all use the same representation:
-
-| Recurrence                    | `rule`                                | Example `start`       |
-| ----------------------------- | ------------------------------------- | --------------------- |
-| Every hour                    | `FREQ=HOURLY`                         | `2026-09-09T09:00:00` |
-| Every 90 minutes              | `FREQ=MINUTELY;INTERVAL=90`           | `2026-09-09T09:00:00` |
-| Daily at 09:00 and 17:00      | `FREQ=DAILY;BYHOUR=9,17`              | `2026-09-09T09:00:00` |
-| Every other Monday and Friday | `FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,FR`  | `2026-09-07T09:00:00` |
-| Last Friday at 17:00          | `FREQ=MONTHLY;BYDAY=-1FR`             | `2026-09-25T17:00:00` |
-| Last day of each month        | `FREQ=MONTHLY;BYMONTHDAY=-1`          | `2026-09-30T09:00:00` |
-| February 29                   | `FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=29` | `2028-02-29T09:00:00` |
-| Ten hourly occurrences        | `FREQ=HOURLY;COUNT=10`                | `2026-09-09T09:00:00` |
-
-The simple controls generate standard RRULE fields, including `BYSETPOS` when necessary to preserve exact
-pairs such as 08:15 and 16:45 without adding 08:45 and 16:15. No form layout or preset identifier is
-stored. Rules beyond the simple presets appear in the **Custom schedule** field, including when
-other execution settings change. Custom intervals, monthly/yearly patterns, and finite rules
-remain fully supported by YAML/API; they are not expanded into extra form controls.
-
-A schedule has no connection or filters. It can share a document with other events, such as
-`manual.run`, so one prompt runs on the clock and on demand. A tick supplies no inputs: it runs with
-each input's `default`, so a document with a schedule cannot declare a `required` input. A manual
-dispatch addresses the document by its `name` wherever `manual.run` sits under `on`. Only schedule
-occurrences take part in the overlap exclusion below; a manual run neither delays nor is delayed by
-a tick. The form edits a single event, so a document with several events is edited in YAML. Other
-execution settings work normally, including GitHub authority, provider options, worktrees,
-continuation and outputs.
-
-`${{ paseo.context }}` contains a `schedule` object with `trigger_id`, `scheduled_at` (the intended
-UTC occurrence), and `timezone`. History identifies the source as `schedule.tick`. Each occurrence
-has its own durable identity; it is never represented as an external user's manual action.
-
-## Timing and recovery
-
-- Creation, re-enabling, and recurrence changes start at the next future occurrence. Changing only
-  execution settings preserves the next occurrence. Accepted runs retain their original revision.
-- The Hub clock checks once per second. Dispatch can happen later, depending on load and daemon
-  connectivity. These are calendar times, not precise execution deadlines.
-- After downtime, one catch-up run represents the earliest missed occurrence, then the clock advances
-  beyond the current time. Hub does not replay every missed scan.
-- While a scheduled run remains active, including while it waits for a daemon, Hub skips due
-  occurrences. It does not queue a parallel run or accumulate a backlog. Failed and completed runs
-  release this exclusion. A disabled trigger stops future occurrences and leaves accepted runs alone.
-  Disabling/re-enabling or editing a trigger preserves exclusion for its accepted run.
-- Times follow the selected timezone's local calendar. A local time missing during a daylight-saving
-  jump is skipped. A local time repeated when clocks turn back runs only at its earlier instant.
-  Minute/hour intervals follow this local clock too; use UTC for elapsed-time intervals across DST.
-  Missing dates, such as February 31, are skipped. `COUNT` counts valid recurrence occurrences
-  since the anchor, including occurrences before enablement or skipped because a run was active;
-  it does not count successful executions. Missing DST times do not consume it. `UNTIL` is an
-  inclusive UTC date-time, such as `UNTIL=20261231T235959Z`. Exhausted rules have no next occurrence.
-  An already-persisted overdue final occurrence still receives the normal one catch-up run.
-- If the daemon is offline or connected to another Hub process, workflow work remains queued until
-  the process with that connection can dispatch it. The existing maximum runtime still bounds that
-  wait. This dispatch behavior applies to all trigger sources.
-
-The feature accepts a single RRULE, without exception calendars, multiple-rule unions or custom
-backlog/overlap policies. `COUNT` and `INTERVAL` are limited to 10,000 and rules to 2,048 characters;
-recurrence evaluation is bounded. Invalid fields, combinations and rules with no reachable
-occurrence are rejected. Exclusion is per trigger; separately authored triggers can execute
-simultaneously on the same daemon. The earlier daily/weekly YAML shape in this unreleased PR is
-replaced by the three-field representation above.
-
-## Ownership and storage
-
-`src/triggers/schedule/` owns recurrence, its controls, clock, context, and `trigger_schedules` state.
-The recurrence document is independent of the form. `rrule-temporal` expands calendar candidates;
-a small adapter resolves wall times through Temporal, skips gaps, chooses the earlier fold and
-applies finite limits to valid occurrences. RFC month/year anchor defaults are explicit so invalid
-month dates are skipped instead of constrained. The operational table stores the recurrence,
-next occurrence and active run; exhausted schedules use a null next occurrence.
-
-Trigger save synchronizes this state within its existing transaction. A clock tick locks the owning
-trigger and scheduling state, then atomically writes the provider receipt, ordinary workflow run,
-steps, wakeup, next occurrence, and active-run link. Workflow intake is shared with other sources.
-Any failure rolls back the entire occurrence; another Hub instance cannot accept it concurrently.
-
-Occurrence generation is separate from execution ownership. The ordinary workflow worker checks
-whether its process has the resolved daemon connection before creating an execution or consuming
-its execution allowance. It releases unavailable work for another worker while preserving lease
-recovery information. Scheduling adds no transport, credentials path, or external infrastructure.
-Both PostgreSQL and the supported single-process embedded runtime use the same scheduling repository.
-
-Daemon-native schedules remain independent. Hub never creates, edits, or synchronizes them.
+Schedule payloads are `{ scheduledAt, timezone }`; their envelope is
+`{ source: "schedule", type: "tick", id: "schedule:<ISO time>", receivedAt, payload }`.
+Manual payloads are exactly the submitted JSON. Code decides how to interpret the two entries;
+there is no implicit prompt or context injection. Deploy with the ordinary Trigger CLI/API.
+The existing historical YAML schedule store remains for already configured historical/project
+workflows, with its own persisted history; rewriting to code preserves the Trigger identity.

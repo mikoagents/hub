@@ -1,5 +1,6 @@
 import type { Locks } from "./runtime/locks/index.js";
-import { and, eq, isNull, or, lte, sql, isNotNull } from "drizzle-orm";
+import { and, eq, isNull, or, lte, sql, isNotNull, inArray } from "drizzle-orm";
+import { holdsProviderSubscription } from "../triggers/code/routing.js";
 import { linearConnectionRequiresReauthorization } from "../providers/linear/client.js";
 import type { DatabaseRuntime, DrizzleHandle } from "./runtime/index.js";
 import * as schema from "./schema.js";
@@ -123,7 +124,24 @@ export class ProviderEventAcceptanceRepository {
           ),
         );
 
-      const selectedRoutes = selectFirstRoutePerProject(routes);
+      let resource = resourceId === undefined ? undefined : String(resourceId);
+      if (provider === "github") resource = input.repo ?? undefined;
+      const liveCodeRoutes = await this.liveCodeRoutes(
+        transaction,
+        connection.organizationId,
+        provider,
+        connection.slug,
+        resource,
+      );
+      const selectedRoutes = selectFirstRoutePerProject([
+        ...routes,
+        ...liveCodeRoutes.map((route) => ({
+          projectId: route.projectId,
+          revisionId: route.revisionId,
+          connectionId: connection.id,
+          resourceId: resourceId === undefined ? null : String(resourceId),
+        })),
+      ]);
       if (selectedRoutes.length === 0) {
         const reason = "no_project_route";
         await transaction
@@ -161,6 +179,57 @@ export class ProviderEventAcceptanceRepository {
         receiptId: receipt.id,
       };
     });
+  }
+
+  private async liveCodeRoutes(
+    transaction: HubTransaction,
+    organizationId: string,
+    provider: string,
+    connection: string,
+    resource: string | undefined,
+  ) {
+    const rows = await transaction
+      .selectDistinct({
+        projectId: schema.organizationTriggers.runtimeProjectId,
+        revisionId: schema.projects.activeConfigurationRevisionId,
+        subscriptions: sql<unknown>`${schema.organizationTriggerRevisions.sourceEvidence}->'artifact'->'manifest'->'on'`,
+      })
+      .from(schema.triggerCodeRuns)
+      .innerJoin(
+        schema.organizationTriggerRevisions,
+        and(
+          eq(schema.organizationTriggerRevisions.id, schema.triggerCodeRuns.revisionId),
+          eq(schema.organizationTriggerRevisions.organizationId, organizationId),
+        ),
+      )
+      .innerJoin(
+        schema.organizationTriggers,
+        and(
+          eq(schema.organizationTriggers.id, schema.triggerCodeRuns.triggerId),
+          eq(schema.organizationTriggers.organizationId, organizationId),
+        ),
+      )
+      .innerJoin(
+        schema.projects,
+        and(
+          eq(schema.projects.id, schema.organizationTriggers.runtimeProjectId),
+          eq(schema.projects.organizationId, organizationId),
+          eq(schema.projects.status, "active"),
+        ),
+      )
+      .where(
+        and(
+          eq(schema.triggerCodeRuns.organizationId, organizationId),
+          inArray(schema.triggerCodeRuns.status, ["queued", "running", "waiting"]),
+        ),
+      );
+    return rows.flatMap((row) =>
+      row.projectId !== null &&
+      row.revisionId !== null &&
+      holdsProviderSubscription(row.subscriptions, provider, connection, resource)
+        ? [{ projectId: row.projectId, revisionId: row.revisionId }]
+        : [],
+    );
   }
 
   persistManual(input: PersistManualEventInput): Promise<ManualEventPersistence> {
@@ -565,6 +634,7 @@ async function findConnection(
       .select({
         id: schema.githubConnections.id,
         organizationId: schema.githubConnections.organizationId,
+        slug: schema.githubConnections.slug,
         status: schema.githubConnections.status,
       })
       .from(schema.githubConnections)
@@ -577,6 +647,7 @@ async function findConnection(
       .select({
         id: schema.slackConnections.id,
         organizationId: schema.slackConnections.organizationId,
+        slug: schema.slackConnections.slug,
       })
       .from(schema.slackConnections)
       .where(eq(schema.slackConnections.teamId, String(externalId)))
@@ -588,6 +659,7 @@ async function findConnection(
       .select({
         id: schema.linearConnections.id,
         organizationId: schema.linearConnections.organizationId,
+        slug: schema.linearConnections.slug,
         scopes: schema.linearConnections.scopes,
         refreshToken: schema.linearConnections.refreshToken,
         accessTokenExpiresAt: schema.linearConnections.accessTokenExpiresAt,
@@ -601,6 +673,7 @@ async function findConnection(
     .select({
       id: schema.discordConnections.id,
       organizationId: schema.discordConnections.organizationId,
+      slug: schema.discordConnections.slug,
     })
     .from(schema.discordConnections)
     .where(eq(schema.discordConnections.guildId, String(externalId)))

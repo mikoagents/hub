@@ -20,7 +20,7 @@ schema digest. Hub vendors that canonical schema in `src/miko/protocol.ts`; runt
 has no sibling-checkout dependency. `npm run check:miko-protocol` detects drift. Source acceptance
 also verifies the daemon's clean, exact commit and compares the schema byte-for-byte.
 
-A socket must offer `x-miko-execution-protocol: 2.0.0`, then complete `miko.hello`/`miko.ready` with
+A socket must offer `x-miko-execution-protocol: 2.1.0`, then complete `miko.hello`/`miko.ready` with
 matching enrolled permissions. Native session frames and other versions are rejected. Enrollment
 credentials establish a connection; `hub.execute` separately grants execution.
 
@@ -70,3 +70,11 @@ Protocol 2.0.0 removes execution backends and existing-Paseo service forwarding.
 Migration `0053_remove_execution_backends` refuses active work, releases old continuation keys
 and removes retired selectors from historical session data. Existing remote sessions are not
 converted to local ones. Upgrade Hub and Miko together and start fresh sessions after draining.
+
+## Diagnostic history
+
+Protocol 2.1.0 adds owned-session timeline reads with bounded pages, epoch/sequence cursors and
+native/provider session metadata. Hub caches redacted canonical rows and presents the session
+in Activity; Miko supplies authoritative available history through its existing session manager.
+Upgrade both sides together for the exact protocol handshake. Native CLI inspection follows
+Paseo's `agent ls`, `agent inspect`, and `agent logs` commands.

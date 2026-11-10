@@ -1,3 +1,4 @@
+import { isolatedProcessEnvironment } from "../src/test-utils/isolated-environment.js";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createServer, type Server as NetServer } from "node:net";
@@ -248,7 +249,7 @@ interface ApplicationEnvironmentInput {
 function applicationEnvironment(input: ApplicationEnvironmentInput): NodeJS.ProcessEnv {
   const browserAuthEnabled = input.browserAuth !== false;
   const environment: NodeJS.ProcessEnv = {
-    ...process.env,
+    ...isolatedProcessEnvironment(),
     PORT: String(input.port),
     PASEO_HUB_BIND: "127.0.0.1",
     PASEO_REGISTRATION_MODE:
