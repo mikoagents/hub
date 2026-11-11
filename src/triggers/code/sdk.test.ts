@@ -200,6 +200,36 @@ const publication = {
 };
 
 describe("GitHub author helpers", () => {
+  it("accepts GitHub's canonical repository-id pagination links while keeping requests on the granted repository path", async () => {
+    const paths: string[] = [];
+    const client = createGitHubClient({
+      request: async (_id, _grant, input) => {
+        paths.push(input.path);
+        const page = Number(new URL(input.path, "https://api.github.com").searchParams.get("page"));
+        return {
+          status: 200,
+          data: [{ id: page }],
+          headers:
+            page === 1
+              ? {
+                  link: '<https://api.github.com/repositories/123/issues/3/comments?per_page=1&page=2>; rel="next"',
+                }
+              : {},
+        };
+      },
+      sleep: async () => {},
+      withLock: async (_id, _key, action) => action(),
+    });
+    const rows = await client
+      .repo("github", "example/project")
+      .comments.list("discussion", 3, { perPage: 1 });
+    assert.deepEqual(
+      rows.map((row) => row.id),
+      [1, 2],
+    );
+    assert.ok(paths.every((path) => path.startsWith("/repos/example/project/issues/3/comments?")));
+  });
+
   it("serializes concurrent publication, recovers a lost POST response, and verifies the actual comment", async () => {
     const f = githubFixture({ lostResponse: true });
     const repo = f.client.repo("github", "example/project");

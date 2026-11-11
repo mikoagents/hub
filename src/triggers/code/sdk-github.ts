@@ -216,13 +216,7 @@ export function createGitHubClient(transport: GitHubTransport) {
           throw new Error("GitHub pagination is incomplete: missing next page");
         return rows;
       }
-      next = new URL(link);
-      if (
-        next.origin !== first.origin ||
-        next.origin !== "https://api.github.com" ||
-        next.pathname !== first.pathname
-      )
-        throw new Error("GitHub pagination changed endpoint");
+      next = githubNextPage(first, link);
     }
     throw new Error("GitHub pagination exceeds maxPages; partial data was not returned");
   }
@@ -367,6 +361,19 @@ export function createGitHubClient(transport: GitHubTransport) {
     };
   }
   return { request, response, paginate, repo };
+}
+
+function githubNextPage(first: URL, link: string): URL {
+  const next = new URL(link);
+  if (next.origin !== first.origin) throw new Error("GitHub pagination changed endpoint");
+  const resource = first.pathname.replace(/^\/repos\/[^/]+\/[^/]+/u, "");
+  const canonical = /^\/repositories\/\d+(\/.*)?$/u.exec(next.pathname);
+  if (next.pathname !== first.pathname && (canonical === null || (canonical[1] ?? "") !== resource))
+    throw new Error("GitHub pagination changed endpoint");
+  // GitHub emits repository-id aliases in Link. Keep the original granted path;
+  // only the pagination query is taken from the canonical response link.
+  next.pathname = first.pathname;
+  return next;
 }
 
 function validateMarker(options: FindGitHubCommentOptions) {

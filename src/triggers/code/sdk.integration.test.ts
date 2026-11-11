@@ -12,7 +12,22 @@ it("uses the packaged author API across JSONB recovery, a transient read failure
   const fixture = await setupCodeStorage("embedded", undefined, true);
   let reads = 0,
     posts = 0;
-  const comments: unknown[] = [];
+  const comments = [
+    {
+      id: 80,
+      body: "Earlier discussion",
+      user: { login: "human" },
+      issue_url: "https://api.github.com/repos/example/project/issues/1",
+      html_url: "https://github.com/example/project/issues/1#issuecomment-80",
+    },
+    {
+      id: 81,
+      body: "More discussion",
+      user: { login: "human" },
+      issue_url: "https://api.github.com/repos/example/project/issues/1",
+      html_url: "https://github.com/example/project/issues/1#issuecomment-81",
+    },
+  ];
   const remote = createFetchServer(async (request) => {
     assert.equal(request.headers.get("authorization"), "Bearer local-github-test-credential");
     const path = new URL(request.url).pathname;
@@ -32,7 +47,9 @@ it("uses the packaged author API across JSONB recovery, a transient read failure
     if (path.endsWith("/comments") && request.method === "POST") {
       posts++;
       const body: unknown = await request.json();
-      assert.ok(body && typeof body === "object" && "body" in body);
+      assert.ok(
+        body && typeof body === "object" && "body" in body && typeof body.body === "string",
+      );
       const comment = {
         id: 10,
         body: body.body,
@@ -43,8 +60,21 @@ it("uses the packaged author API across JSONB recovery, a transient read failure
       comments.push(comment);
       return Response.json(comment);
     }
-    if (path.endsWith("/issues/comments/10")) return Response.json(comments[0]);
-    if (path.endsWith("/comments")) return Response.json(comments);
+    if (path.endsWith("/issues/comments/10"))
+      return Response.json(comments.find((comment) => comment.id === 10));
+    if (path.endsWith("/comments")) {
+      const url = new URL(request.url);
+      const perPage = Number(url.searchParams.get("per_page"));
+      const page = Number(url.searchParams.get("page"));
+      const rows = comments.slice((page - 1) * perPage, page * perPage);
+      const headers =
+        page * perPage < comments.length
+          ? {
+              link: `<https://api.github.com/repositories/9001/issues/1/comments?per_page=${perPage}&page=${page + 1}>; rel="next"`,
+            }
+          : {};
+      return Response.json(rows, { headers });
+    }
     return new Response("unexpected", { status: 404 });
   });
   await new Promise<void>((resolve) => remote.listen(0, "127.0.0.1", resolve));
@@ -78,7 +108,7 @@ export default defineTrigger({
   const repo=ctx.github.repo("repo","example/project");
   try { await repo.issues.get("not-found",999); throw new Error("missing expected error"); }
   catch(error){ if(!(error instanceof GitHubRequestError) || error.status!==404) throw error; }
-  const publication={number:1,marker:"<!-- sdk-test:request:1 -->",author:"replace-with-your-app[bot]"};
+  const publication={number:1,marker:"<!-- sdk-test:request:1 -->",author:"replace-with-your-app[bot]",perPage:1};
   const existing=await repo.comments.find("existing",publication);
   if(existing)return existing;
   const issue=await repo.issues.get("issue",1,{retry:{maxAttempts:2,initialDelayMs:0}});
