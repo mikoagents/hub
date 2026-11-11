@@ -24,6 +24,19 @@ export async function buildTrigger(
   const entryRelative = relative(root, entryPath);
   if (entryRelative.startsWith("..") || isAbsolute(entryRelative))
     throw new Error("Trigger entry must be inside its project directory");
+  const sdk = await realpath(
+    fileURLToPath(
+      new URL(
+        existsSync(fileURLToPath(new URL("./sdk.js", import.meta.url))) ? "./sdk.js" : "./sdk.ts",
+        import.meta.url,
+      ),
+    ),
+  );
+  const sdkFiles = new Set(
+    ["sdk", "sdk-json", "sdk-errors", "sdk-github"].flatMap((name) =>
+      ["ts", "js"].map((extension) => join(dirname(sdk), `${name}.${extension}`)),
+    ),
+  );
   const result = await build({
     entryPoints: [entryPath],
     bundle: true,
@@ -38,12 +51,7 @@ export async function buildTrigger(
     metafile: true,
     absWorkingDir: root,
     alias: {
-      "@getpaseo/hub/triggers": fileURLToPath(
-        new URL(
-          existsSync(fileURLToPath(new URL("./sdk.js", import.meta.url))) ? "./sdk.js" : "./sdk.ts",
-          import.meta.url,
-        ),
-      ),
+      "@getpaseo/hub/triggers": sdk,
     },
   });
   const code = result.outputFiles[0]?.text;
@@ -55,8 +63,8 @@ export async function buildTrigger(
     const manifest = TriggerManifestSchema.parse(await inspectModule(filename));
     const sources: TriggerArtifact["sources"] = [];
     for (const input of Object.keys(result.metafile.inputs)) {
-      if (input.includes("/triggers/code/sdk.")) continue;
       const absolute = resolve(root, input);
+      if (sdkFiles.has(absolute)) continue;
       const path = relative(root, absolute);
       if (path.startsWith("..") || isAbsolute(path)) {
         if (absolute.includes("/node_modules/")) continue;

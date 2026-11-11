@@ -1,5 +1,35 @@
 /* oxlint-disable typescript-eslint/no-unsafe-type-assertion -- Generic results follow the author contract; Hub validates JSON and declared agent schemas. */
 /** The author-facing Trigger SDK. This module has no Hub/server side effects. */
+import { durableJson } from "./sdk-json.js";
+import { createGitHubClient, type TriggerGitHub } from "./sdk-github.js";
+import { errorFailure, operationError, type TriggerFailure } from "./sdk-errors.js";
+
+export { stableJson } from "./sdk-json.js";
+export { GitHubRequestError, TriggerOperationError } from "./sdk-errors.js";
+export type { TriggerFailure } from "./sdk-errors.js";
+export { githubIssueComment } from "./sdk-github.js";
+export type {
+  TriggerGitHub,
+  GitHubRepository,
+  GitHubRequest,
+  GitHubResponse,
+  GitHubReadOptions,
+  GitHubListOptions,
+  GitHubCommentReceipt,
+  PublishGitHubCommentOptions,
+  FindGitHubCommentOptions,
+  GitHubIssue,
+  GitHubComment,
+  GitHubPull,
+  GitHubFile,
+  GitHubReview,
+  GitHubReviewComment,
+  GitHubWorkflow,
+  GitHubCheck,
+  GitHubStatus,
+  GitHubCommit,
+  GitHubPermission,
+} from "./sdk-github.js";
 export type TriggerValue =
   | null
   | boolean
@@ -125,17 +155,7 @@ export interface TriggerContext {
     set(id: string, key: string, value: unknown): Promise<void>;
     delete(id: string, key: string): Promise<void>;
   };
-  github: {
-    request<T = TriggerValue>(
-      id: string,
-      grant: string,
-      request: {
-        method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-        path: string;
-        body?: TriggerValue;
-      },
-    ): Promise<T>;
-  };
+  github: TriggerGitHub;
   secret(name: string): string;
   log(message: string, data?: TriggerValue): Promise<void>;
   skip(reason: string): never;
@@ -158,11 +178,14 @@ export type OperationReply =
   | { status: "completed"; output: unknown }
   | { status: "execute" }
   | { status: "waiting" }
-  | { status: "failed"; error: string };
+  | { status: "failed"; error: string; failure?: TriggerFailure };
 
 export interface TriggerTransport {
   operation(request: OperationRequest): Promise<OperationReply>;
-  complete(id: string, result: { output: unknown } | { error: string }): Promise<void>;
+  complete(
+    id: string,
+    result: { output: unknown } | { error: string; failure?: TriggerFailure },
+  ): Promise<void>;
   log(message: string, data?: TriggerValue): Promise<void>;
 }
 
@@ -202,7 +225,7 @@ export function createTriggerContext(input: {
     } finally {
       requests--;
     }
-    if (reply.status === "failed") throw new Error(reply.error);
+    if (reply.status === "failed") throw operationError(reply.error, reply.failure, id);
     if (reply.status === "waiting") {
       waiting++;
       waitingIds.add(id);
@@ -212,11 +235,11 @@ export function createTriggerContext(input: {
     }
     if (reply.status === "execute") throw new Error(`Unexpected local operation: ${kind}`);
     changed();
-    return reply.output as T;
+    return durableJson(reply.output) as T;
   }
   const context: TriggerContext = {
     runId: input.runId,
-    event: input.event,
+    event: durableJson(input.event) as TriggerEvent,
     deadlineAt: input.deadlineAt,
     startedAt: input.startedAt,
     async step<I, O>(id: string, value: I, action: (value: I) => O | Promise<O>): Promise<O> {
@@ -227,22 +250,24 @@ export function createTriggerContext(input: {
       } finally {
         requests--;
       }
-      if (reply.status === "failed") throw new Error(reply.error);
+      if (reply.status === "failed") throw operationError(reply.error, reply.failure, id);
       if (reply.status === "completed") {
         changed();
-        return reply.output as O;
+        return durableJson(reply.output) as O;
       }
       if (reply.status !== "execute")
         throw new Error("A local step cannot wait for another runner");
       activities++;
       const task = (async () => {
         try {
-          const output = await action(value);
-          await input.transport.complete(id, { output: output === undefined ? null : output });
-          return output;
+          const result = await action(value);
+          const output = durableJson(result === undefined ? null : result);
+          await input.transport.complete(id, { output });
+          return output as O;
         } catch (error) {
           await input.transport.complete(id, {
             error: error instanceof Error ? error.message : String(error),
+            ...(errorFailure(error) === undefined ? {} : { failure: errorFailure(error)! }),
           });
           throw error;
         } finally {
@@ -291,7 +316,11 @@ export function createTriggerContext(input: {
         await operation(id, "state.delete", { key });
       },
     },
-    github: { request: (id, grant, request) => operation(id, "github", { grant, ...request }) },
+    github: createGitHubClient({
+      request: (id, grant, request) => operation(id, "github", { grant, ...request }),
+      sleep: (id, milliseconds) => context.sleep(id, milliseconds),
+      withLock: (id, key, action) => context.withLock(id, key, action),
+    }),
     secret(name) {
       const value = Object.hasOwn(input.secrets, name) ? input.secrets[name] : undefined;
       if (value === undefined)

@@ -157,6 +157,12 @@ A replay that changes an operation's kind or input for the same ID fails visibly
 started operation. Business branches and loops are re-executed on recovery; their durable results
 provide deterministic decisions. Use `ctx.startedAt` for stable workflow time.
 
+SDK results use the same normalized JSON representation on initial execution and recovery,
+including nested object key order. Import `stableJson(value, space?)` when rendering JSON into
+a prompt or another string. It validates JSON values and sorts object keys independently of
+locale; arrays retain their order. Functions, dates, `undefined`, and non-finite numbers are
+rejected. Operation input hashes remain a separate coordinator contract.
+
 A local step or GitHub request interrupted after it started can have an **unknown external
 outcome**. Hub records an explicit failed operation rather than repeating a possible write.
 Code may catch that failure, reconcile the remote operation using its own idempotency key,
@@ -169,6 +175,86 @@ an ordinary local callback. Direct asynchronous work outside SDK operations has 
 children through the existing lifecycle. A successful agent still needs its authorized MCP
 `finish_execution`, validated structured output and any required outputs; process exit or prose
 alone does not complete the contract.
+
+## Read GitHub data and publish comments
+
+Bind a client to an explicitly granted connection alias and repository. These helpers use the
+same installation-token lifecycle, repository checks and durable operation journal as
+`ctx.github.request`. Endpoint result types come from GitHub's Octokit definitions.
+
+```ts
+import { githubIssueComment, stableJson } from "@getpaseo/hub/triggers";
+
+const source = githubIssueComment(ctx.event);
+if (source === null || source.action !== "created") ctx.skip("Not a new issue comment");
+const github = ctx.github.repo("discussion", source.repository);
+const issue = await github.issues.get("issue", source.number);
+const comments = await github.comments.list("discussion", source.number, {
+  maxPages: 5,
+  maxItems: 500,
+  retry: { maxAttempts: 3, maxDelayMs: 30_000 },
+});
+const prompt = stableJson({ request: source.body, issue, comments }, 2);
+```
+
+`githubIssueComment(event)` extracts the repository, Issue/PR number, comment id, body,
+author, author type, action, and item kind from an issue-comment event. Other event kinds return
+`null`; malformed matching events throw. It does not choose authorized users, mention spellings,
+or whether bots should run. Make those decisions in your Trigger before reading private context
+or dispatching an agent.
+
+Repository clients expose `issues.get`, `comments.get/list/find/publishOnce`,
+`pulls.get/files/reviews/review/comments/reviewComments`, `collaborators.permission`,
+`commits.get`, `actions.runs`, `checks.list`, and `statuses.list`. Reads are independent:
+request only the context your workflow needs. `actions.runs` accepts `{ headSha, event? }`;
+checks and statuses take the explicit commit ref. No context is automatically added to prompts.
+
+List helpers follow GitHub's `Link` header. Options default to `perPage: 100`, `maxPages: 10`,
+and `maxItems: 1000`; exceeding either bound or receiving incomplete evidence throws rather
+than returning a partial list. `ctx.github.paginate(id, grant, { path, itemsKey?, ...options })`
+provides the same behavior for other repository endpoints. Use `itemsKey` for response objects
+such as `workflow_runs` or `check_runs`. `ctx.github.response` returns `{ data, status, headers }`
+when response metadata is needed; `request` continues to return the response body directly.
+
+GET retries are opt-in through `{ retry: { maxAttempts, initialDelayMs?, maxDelayMs? } }`.
+Attempts and delays are durable operations, so restarting a worker preserves the retry budget.
+The SDK retries transport failures, server errors and rate limits. It respects `Retry-After`
+or rate-limit reset time; a delay beyond `maxDelayMs` fails rather than retrying early.
+The default initial delay is 1000 ms and maximum delay is 60000 ms. Writes reject automatic
+retry options. IDs for the helper and its generated child operations must remain stable.
+
+Catch `GitHubRequestError` to inspect `status`, `requestId`, `retryAfterMs`, and
+`failure.{code,retryable,outcome}`. Metadata survives durable replay and error identity works
+across a bundled Trigger and its runner. `outcome: "unknown"` means a write may have happened.
+Error messages do not copy GitHub response bodies or authorization headers into the journal.
+
+To publish one discussion reply per logical request, choose a stable HTML marker and expected
+GitHub author explicitly. Check for a previous verified reply before starting expensive work:
+
+```ts
+const publication = {
+  number: source.number,
+  marker: `<!-- my-workflow:source-comment:${source.commentId} -->`,
+  author: "my-app[bot]",
+  maxPages: 5,
+};
+const previous = await github.comments.find("previous-reply", publication);
+if (previous !== null) return previous;
+
+// Recheck your workflow's source/permission/head conditions before publishing.
+return github.comments.publishOnce("reply", {
+  ...publication,
+  body: "The agent's structured reply",
+});
+```
+
+`publishOnce` serializes publication by repository, item and marker within the Trigger, appends
+the marker, checks for an existing matching author, and reads the actual comment back to verify
+its id, target, author, body and URL. A failed POST is reconciled by reading; it is never blindly
+repeated. Multiple matching comments, a conflicting body, or an unconfirmed result fail visibly.
+The receipt contains `{ repository, number, id, url, body, deduplicated }`. It does not promise
+exactly-once behavior from GitHub or decide whether a source comment is still authorized;
+permission and source/head rechecks remain explicit workflow policy.
 
 ## Show the workflow
 

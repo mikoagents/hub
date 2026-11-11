@@ -2,6 +2,7 @@ import { jsonValue } from "./contract.js";
 /* oxlint-disable complexity, max-depth -- Canonical HTTP route branches share one bounded-body and authorization boundary. */
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseTriggerFailure } from "./sdk-errors.js";
 import type { PublicApi, PublicApiComposition } from "../../public-api/index.js";
 import type { ApiKeyScope } from "../../auth/api-key-contract.js";
 import { isDatabaseUnavailableError } from "../../db/errors.js";
@@ -94,7 +95,12 @@ async function handle(
           case "complete-operation": {
             if (typeof body["id"] !== "string") throw new TriggerCodeError("Operation id required");
             const result = Object.hasOwn(body, "error")
-              ? { error: z.string().parse(body["error"]) }
+              ? {
+                  error: z.string().parse(body["error"]),
+                  ...(body["failure"] === undefined
+                    ? {}
+                    : { failure: parseTriggerFailure(body["failure"]) }),
+                }
               : { output: body["output"] ?? null };
             await service.completeOperation(organizationId, runId, bearer, body["id"], result);
             break;

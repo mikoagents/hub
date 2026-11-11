@@ -6,6 +6,7 @@ import type { DaemonAgentConfigurationValidator } from "../../configuration/stor
 import type { GitHubAuthorityRegistration } from "../../providers/registration.js";
 import type { CodeRun } from "./records.js";
 import { digest, CodeAgentOptionsSchema, ownGrant } from "./contract.js";
+import { requestGitHub } from "./github-transport.js";
 import {
   object,
   TriggerCodeError,
@@ -204,25 +205,7 @@ export function createTriggerCodeAgentHost(input: {
         permissions: grant.permissions,
       });
       try {
-        const response = await fetch(`https://api.github.com${String(value["path"])}`, {
-          method: String(value["method"]),
-          headers: {
-            authorization: `Bearer ${lease.token}`,
-            accept: "application/vnd.github+json",
-            "x-github-api-version": "2026-03-10",
-            "content-type": "application/json",
-          },
-          ...(value["body"] === undefined ? {} : { body: JSON.stringify(value["body"]) }),
-          redirect: "error",
-          signal: AbortSignal.timeout(
-            Math.min(15_000, Math.max(1, Date.parse(run.deadlineAt) - Date.now())),
-          ),
-        });
-        if (!response.ok) throw new Error(`GitHub request failed with HTTP ${response.status}`);
-        const body = await response.text();
-        if (Buffer.byteLength(body) > 1024 * 1024)
-          throw new Error("GitHub response exceeds 1 MiB; paginate the request");
-        return body.length === 0 ? null : (JSON.parse(body) as unknown);
+        return await requestGitHub(value, lease.token, run.deadlineAt);
       } finally {
         await input.githubAuthority.revoke(lease.token);
       }

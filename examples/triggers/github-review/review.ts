@@ -4,32 +4,17 @@ import { policy } from "./policy.js";
 interface PullRequest {
   number: number;
   state: string;
-  draft: boolean;
+  draft?: boolean | undefined;
   user: { login: string };
   head: { sha: string };
   base: { sha: string };
   labels?: { name: string }[];
-}
-interface Workflow {
-  id: number;
-  name: string;
-  status: string;
-  conclusion: string | null;
 }
 interface ReviewReceipt {
   review_id: number;
   commit_sha: string;
   url: string;
   inline_comments: number;
-}
-interface PublishedReview {
-  id: number;
-  commit_id: string;
-  html_url: string;
-  state: string;
-  body: string;
-  submitted_at: string | null;
-  user: { login: string };
 }
 const path = `/repos/${policy.repository}`;
 const receiptSchema = {
@@ -188,10 +173,7 @@ function eventHead(event: TriggerEvent): string | null {
   return pull?.head?.sha ?? workflow?.head_sha ?? check?.head_sha ?? null;
 }
 function readPull(ctx: TriggerContext, id: string, number: number) {
-  return ctx.github.request<PullRequest>(id, "review", {
-    method: "GET",
-    path: `${path}/pulls/${number}`,
-  });
+  return ctx.github.repo("review", policy.repository).pulls.get(id, number);
 }
 
 async function waitForCi(ctx: TriggerContext, number: number, head: string, id: string) {
@@ -199,18 +181,9 @@ async function waitForCi(ctx: TriggerContext, number: number, head: string, id: 
     const pull = await readPull(ctx, `${id}:${attempt}:pull`, number);
     eligible(ctx, pull);
     if (pull.head.sha !== head) ctx.skip("PR head changed while waiting for CI");
-    const workflows: Workflow[] = [];
-    for (let page = 1; page <= policy.maxPages; page++) {
-      const result = await ctx.github.request<{ total_count: number; workflow_runs: Workflow[] }>(
-        `${id}:${attempt}:workflows:${page}`,
-        "review",
-        { method: "GET", path: `${path}/actions/runs?head_sha=${head}&per_page=100&page=${page}` },
-      );
-      workflows.push(...result.workflow_runs);
-      if (workflows.length >= result.total_count) break;
-      if (page === policy.maxPages)
-        throw new Error("CI evidence exceeds the configured pagination bound");
-    }
+    const workflows = await ctx.github
+      .repo("review", policy.repository)
+      .actions.runs(`${id}:${attempt}:workflows`, { headSha: head }, { maxPages: policy.maxPages });
     const latest = [
       ...new Map(workflows.sort((a, b) => a.id - b.id).map((run) => [run.name, run])).values(),
     ];
@@ -264,31 +237,22 @@ async function verifyReceipt(
   receipt: ReviewReceipt,
   id: string,
 ) {
-  const review = await ctx.github.request<PublishedReview>(id, "review", {
-    method: "GET",
-    path: `${path}/pulls/${number}/reviews/${receipt.review_id}`,
-  });
+  const github = ctx.github.repo("review", policy.repository);
+  const review = await github.pulls.review(id, number, receipt.review_id);
   if (
     !review.submitted_at ||
     review.state === "PENDING" ||
     review.commit_id !== head ||
     receipt.commit_sha !== head ||
     review.html_url !== receipt.url ||
-    review.user.login !== policy.botLogin
+    review.user?.login !== policy.botLogin
   )
     throw new Error(
       "Review receipt does not prove an authorized formal Review on the accepted head",
     );
-  const comments: unknown[] = [];
-  for (let page = 1; page <= policy.maxPages; page++) {
-    const items = await ctx.github.request<unknown[]>(`${id}:comments:${page}`, "review", {
-      method: "GET",
-      path: `${path}/pulls/${number}/reviews/${receipt.review_id}/comments?per_page=100&page=${page}`,
-    });
-    comments.push(...items);
-    if (items.length < 100) break;
-    if (page === policy.maxPages) throw new Error("Review comments exceed the pagination bound");
-  }
+  const comments = await github.pulls.reviewComments(`${id}:comments`, number, receipt.review_id, {
+    maxPages: policy.maxPages,
+  });
   if (comments.length !== receipt.inline_comments)
     throw new Error("Review receipt inline comment count is incorrect");
   return review;

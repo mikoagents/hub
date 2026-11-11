@@ -21,6 +21,7 @@ import {
   type TriggerArtifact,
 } from "./contract.js";
 import type { TriggerEvent, OperationRequest, OperationReply } from "./sdk.js";
+import { errorFailure, type TriggerFailure } from "./sdk-errors.js";
 import {
   terminal,
   type CodeRun,
@@ -485,13 +486,26 @@ export class TriggerCodeService {
         if (existing.status === "completed")
           return { reply: { status: "completed" as const, output: existing.output } };
         if (existing.status === "failed")
-          return { reply: { status: "failed" as const, error: existing.error! } };
+          return {
+            reply: {
+              status: "failed" as const,
+              error: existing.error!,
+              ...(existing.failure === undefined ? {} : { failure: existing.failure }),
+            },
+          };
         if (["step", "github"].includes(existing.kind) && existing.leaseHash !== run.leaseHash) {
           existing.status = "failed";
           existing.error =
             "Step interrupted with an unknown external outcome; reconcile before explicitly retrying";
+          existing.failure = {
+            code: "OPERATION_INTERRUPTED",
+            outcome: "unknown",
+            retryable: existing.kind === "github" && object(existing.input)["method"] === "GET",
+          };
           await tx.putOperation(existing);
-          return { reply: { status: "failed" as const, error: existing.error } };
+          return {
+            reply: { status: "failed" as const, error: existing.error, failure: existing.failure },
+          };
         }
         return { reply: { status: "waiting" as const } };
       }
@@ -530,8 +544,10 @@ export class TriggerCodeService {
         return { status: "completed", output };
       } catch (error) {
         const message = errorMessage(error);
-        await this.completeOperation(organizationId, runId, token, request.id, { error: message });
-        return { status: "failed", error: message };
+        const failure = errorFailure(error);
+        const result = { error: message, ...(failure === undefined ? {} : { failure }) };
+        await this.completeOperation(organizationId, runId, token, request.id, result);
+        return { status: "failed", ...result };
       }
     }
     return outcome.reply;
@@ -694,7 +710,7 @@ export class TriggerCodeService {
     runId: string,
     token: string,
     operationId: string,
-    result: { output: unknown } | { error: string },
+    result: { output: unknown } | { error: string; failure?: TriggerFailure },
   ) {
     bounded(result);
     await this.database.triggerCode.transaction(organizationId, async (tx) => {
@@ -709,6 +725,7 @@ export class TriggerCodeService {
       if (op.status === "completed" || op.status === "failed") return;
       op.status = "error" in result ? "failed" : "completed";
       op.error = "error" in result ? result.error : null;
+      if ("error" in result && result.failure !== undefined) op.failure = result.failure;
       op.output = "output" in result ? result.output : null;
       await tx.putOperation(op);
     });

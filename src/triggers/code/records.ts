@@ -1,4 +1,5 @@
 import type { TriggerEvent } from "./sdk.js";
+import type { TriggerFailure } from "./sdk-errors.js";
 
 export type CodeRunStatus =
   | "queued"
@@ -38,6 +39,7 @@ export interface CodeOperation {
   status: "running" | "waiting" | "completed" | "failed";
   output: unknown;
   error: string | null;
+  failure?: TriggerFailure;
   wakeAt: string | null;
   childRunId: string | null;
   leaseHash: string;
