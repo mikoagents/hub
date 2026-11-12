@@ -389,7 +389,7 @@ export class TriggerCodeService {
 
   async enroll(organizationId: string, name: string) {
     if (!/^[a-z][a-z0-9_-]*$/u.test(name)) throw new TriggerCodeError("Invalid runner name");
-    const token = `paseo_tr_${randomBytes(32).toString("base64url")}`;
+    const token = `miko_tr_${randomBytes(32).toString("base64url")}`;
     const runner: CodeRunner = {
       id: randomUUID(),
       organizationId,

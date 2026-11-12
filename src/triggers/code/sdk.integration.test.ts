@@ -100,7 +100,7 @@ it("uses the packaged author API across JSONB recovery, a transient read failure
     const entry = join(project, "trigger.ts");
     await writeFile(
       entry,
-      `import {defineTrigger,GitHubRequestError} from "@getpaseo/hub/triggers";
+      `import {defineTrigger,GitHubRequestError} from "@mikoagents/hub/triggers";
 export default defineTrigger({
  name:"sdk-client",runner:"test",on:[{source:"manual",event:"run"}],limits:{maxRuntime:"10m"},
  grants:{github:{repo:{connection:"github",repositories:["example/project"],permissions:{issues:"write"}}},targets:{worker:{daemon:"devbox",cwd:"/workspace/test",providers:["codex"]}}},

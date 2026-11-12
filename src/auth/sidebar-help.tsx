@@ -17,10 +17,10 @@ export function HelpChannels() {
         Join the{" "}
         <Button asChild variant="link">
           <a href={DISCORD_INVITE} target="_blank" rel="noreferrer">
-            Paseo Discord
+            Miko Discord
           </a>
         </Button>{" "}
-        and ask in #paseo-hub.
+        and ask in #miko-hub.
       </p>
       <p>
         Or email{" "}

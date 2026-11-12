@@ -57,7 +57,7 @@ const referenceTheme = `
 `;
 const referenceConfiguration = {
   url: "/api/openapi.json",
-  metaData: { title: "Paseo Hub Public API" },
+  metaData: { title: "Miko Hub Public API" },
   theme: "default",
   layout: "modern",
   showSidebar: true,
@@ -87,7 +87,7 @@ export function PublicApiReference() {
     [resolvedTheme],
   );
   return (
-    <main aria-label="Paseo Hub API reference" className="min-h-screen">
+    <main aria-label="Miko Hub API reference" className="min-h-screen">
       {/* Scalar reads its forced colour mode on mount rather than on configuration updates. */}
       <ApiReferenceReact key={resolvedTheme} configuration={configuration} />
     </main>

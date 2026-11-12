@@ -29,7 +29,7 @@ import {
   type AccountSession,
   type OrganizationAccessValue,
 } from "./organization-access.js";
-import { paseoOrganizationPlugin } from "./organization-policy.js";
+import { mikoOrganizationPlugin } from "./organization-policy.js";
 import type { EntitlementsService } from "../entitlements/service.js";
 import {
   UNLIMITED_PROVISIONING,
@@ -204,7 +204,7 @@ export function createAuthServer(options: AuthServerOptions): AuthServer {
         },
       },
     },
-    plugins: [paseoOrganizationPlugin(), tanstackStartCookies()],
+    plugins: [mikoOrganizationPlugin(), tanstackStartCookies()],
   });
   const sessions = {
     async read(headers: Headers): Promise<AccountSession | undefined> {
@@ -246,7 +246,7 @@ export function createAuthServer(options: AuthServerOptions): AuthServer {
   return {
     handle(request) {
       const path = new URL(request.url).pathname;
-      if (path.startsWith("/api/auth/paseo/")) {
+      if (path.startsWith("/api/auth/miko/")) {
         const rejected = rejectCrossOriginCookieMutation(
           request,
           requestBrowserOrigin(request, browserOrigin),

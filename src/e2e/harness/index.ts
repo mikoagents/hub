@@ -338,7 +338,7 @@ export class HubE2E {
     const entry = join(this.root, "trigger.ts");
     await writeFile(
       entry,
-      `import {defineTrigger} from "@getpaseo/hub/triggers";
+      `import {defineTrigger} from "@mikoagents/hub/triggers";
       export default defineTrigger({name:"source-code",runner:"source",on:[{source:"manual",event:"run"}],
         grants:{targets:{local:{daemon:${JSON.stringify(slug)},cwd:${JSON.stringify(this.workspace)},providers:["hub-e2e"]}}},
         limits:{maxRuntime:"2m",maxAgentRuns:2}, async run(ctx){
@@ -352,7 +352,7 @@ export class HubE2E {
           return {children};
         }});`,
     );
-    const cli = [join(HUB_ROOT, "bin/paseo-hub.js"), "trigger"];
+    const cli = [join(HUB_ROOT, "bin/miko.js"), "trigger"];
     const credential = ["--url", this.requireProxy().origin, "--token-file", this.machineKeyFile];
     await runCommand(process.execPath, [...cli, "deploy", entry, ...credential], HUB_ROOT, {});
     const runnerKey = join(this.root, "runner-credential");
@@ -582,12 +582,12 @@ export class HubE2E {
       "        type: string",
       "        choices: [paseo, hub]",
       "    values:",
-      "      selected: '${{ paseo.inputs.repo ?? steps.classify.outputs.repo }}'",
+      "      selected: '${{ miko.inputs.repo ?? steps.classify.outputs.repo }}'",
       "    filters:",
       "      from_users: [real-agent-routing-operator]",
       "    steps:",
       "      - id: classify",
-      "        if: '${{ paseo.inputs.repo == null }}'",
+      "        if: '${{ miko.inputs.repo == null }}'",
       "        environment: real-agent-routing",
       "        max_runtime: 1h",
       "        idle_timeout: 5m",
@@ -595,7 +595,7 @@ export class HubE2E {
       "        agent:",
       `          provider: ${provider}`,
       ...realAgentOptionsYaml(provider),
-      '        prompt: [{ text: "Classify the request and call finish_execution exactly once with output {repo: hub}. Do not use curl, shell, or direct HTTP. Request: ${{ paseo.prompt }}" }] ',
+      '        prompt: [{ text: "Classify the request and call finish_execution exactly once with output {repo: hub}. Do not use curl, shell, or direct HTTP. Request: ${{ miko.prompt }}" }] ',
       "        output:",
       "          schema:",
       "            type: object",
@@ -997,7 +997,7 @@ export class HubE2E {
       if (environment.kind !== "daemon") throw new Error("Expected daemon environment");
       environment.worktree = {
         mode: "branch-off",
-        newBranch: "continuation-${{ paseo.execution.id }}",
+        newBranch: "continuation-${{ miko.execution.id }}",
       };
     }
     const trigger = configuration.triggers.find(
@@ -1445,7 +1445,7 @@ export class HubE2E {
   }
 
   private async startResources(): Promise<void> {
-    this.root = await mkdtemp(join(process.env["TMPDIR"] ?? "/tmp", "paseo-hub-e2e-"));
+    this.root = await mkdtemp(join(process.env["TMPDIR"] ?? "/tmp", "miko-hub-e2e-"));
     this.workspace = join(this.root, "workspace");
     this.acpRecordFile = join(this.root, "acp-records.jsonl");
     this.outputFile = join(this.root, "hub-outputs.jsonl");
@@ -1508,14 +1508,14 @@ export class HubE2E {
         DATABASE_URL: this.requirePostgres().getConnectionUri(),
         PORT: String(this.hubPort),
         HUB_E2E_MACHINE_KEY_FILE: this.machineKeyFile,
-        PASEO_HUB_APP_URL: this.requireProxy().origin,
-        PASEO_HUB_DATA_DIR: join(this.root, "hub-data"),
-        PASEO_HUB_AUTH_SECRET: "hub-e2e-browser-auth-secret-at-least-32-characters",
-        PASEO_REGISTRATION_MODE: "open",
-        PASEO_ORGANIZATION_CREATION: "open",
-        PASEO_BOOTSTRAP_ORGANIZATION: "",
-        PASEO_BOOTSTRAP_OWNER_EMAIL: "",
-        PASEO_BOOTSTRAP_OWNER_PASSWORD: "",
+        MIKO_HUB_APP_URL: this.requireProxy().origin,
+        MIKO_HUB_DATA_DIR: join(this.root, "hub-data"),
+        MIKO_HUB_AUTH_SECRET: "hub-e2e-browser-auth-secret-at-least-32-characters",
+        MIKO_REGISTRATION_MODE: "open",
+        MIKO_ORGANIZATION_CREATION: "open",
+        MIKO_BOOTSTRAP_ORGANIZATION: "",
+        MIKO_BOOTSTRAP_OWNER_EMAIL: "",
+        MIKO_BOOTSTRAP_OWNER_PASSWORD: "",
         HUB_E2E_OUTPUT_FILE: this.outputFile,
       },
     });
@@ -1674,13 +1674,13 @@ export class HubE2E {
       `insert into slack_connections
          (id, organization_id, team_id, slug, team_name, bot_user_id, bot_access_token, scopes)
        values ('00000000-0000-4000-8000-0000000000c1', 'hub-e2e', 'paseo', 'paseo',
-               'Paseo', 'UBOT', 'xoxb-test', '["app_mentions:read", "chat:write"]'::jsonb)
+               'Miko', 'UBOT', 'xoxb-test', '["app_mentions:read", "chat:write"]'::jsonb)
        on conflict (team_id) do nothing`,
     );
     await this.requirePool().query(
       `insert into discord_connections
          (id, organization_id, guild_id, slug, guild_name)
-       values ('00000000-0000-4000-8000-0000000000c2', 'hub-e2e', 'paseo', 'paseo', 'Paseo')
+       values ('00000000-0000-4000-8000-0000000000c2', 'hub-e2e', 'paseo', 'paseo', 'Miko')
        on conflict (guild_id) do nothing`,
     );
     await this.requirePool().query(
@@ -1720,7 +1720,7 @@ export class HubE2E {
         problem.success &&
         problem.data.issues?.some(
           ({ path, message }) =>
-            path[0] === ".paseo/hub.yml" &&
+            path[0] === ".miko/hub.yml" &&
             path[1] === "agents" &&
             path.at(-1) === "provider" &&
             /^Provider '.+' is not available$/u.test(message),
@@ -1759,7 +1759,7 @@ export class HubE2E {
   }
 
   private requireSource(): SourcePaseo {
-    if (!this.source) throw new Error("Source-built Paseo is unavailable");
+    if (!this.source) throw new Error("Source-built Miko is unavailable");
     return this.source;
   }
 

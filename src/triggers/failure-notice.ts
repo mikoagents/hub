@@ -18,7 +18,7 @@ export async function agentFailureNotice(
   billingUrlForOrganization: (organizationId: string) => Promise<string>,
   now = new Date(),
 ): Promise<string> {
-  if (!isExecutionLimitDenial(reason)) return `Paseo agent failed: ${reason}`;
+  if (!isExecutionLimitDenial(reason)) return `Miko agent failed: ${reason}`;
   const denial = decodeEntitlementDenialFailureReason(reason)!;
   const month = new Intl.DateTimeFormat("en-US", { month: "long", timeZone: "UTC" }).format(now);
   const reset = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));

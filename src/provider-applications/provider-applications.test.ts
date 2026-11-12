@@ -17,7 +17,7 @@ import {
 const githubConfiguration: ProviderApplicationConfiguration = {
   provider: "github",
   appId: "42",
-  appSlug: "paseo",
+  appSlug: "miko",
   clientId: "client",
   clientSecret: "client-secret",
   privateKey: "private-key",
@@ -72,7 +72,7 @@ describe("provider applications", () => {
     assert.equal(serialized.includes("webhook-secret"), false);
     assert.deepEqual(overview.providers.github.identifiers, {
       appId: "42",
-      appSlug: "paseo",
+      appSlug: "miko",
       clientId: "client",
     });
   });
@@ -102,7 +102,7 @@ describe("provider applications", () => {
     await fixture.store.save({
       provider: "github",
       configuration: githubConfiguration,
-      identity: { provider: "github", id: "42", name: "Paseo", ownerLogin: "acme" },
+      identity: { provider: "github", id: "42", name: "Miko", ownerLogin: "acme" },
       expectedVersion: undefined,
       updatedByUserId: "operator",
     });
@@ -197,7 +197,7 @@ describe("provider applications", () => {
     fixture.store.values.set("github", {
       provider: "github",
       configuration: githubConfiguration,
-      identity: { provider: "github", id: "42", name: "Paseo", ownerLogin: "acme" },
+      identity: { provider: "github", id: "42", name: "Miko", ownerLogin: "acme" },
       version: 1,
       verifiedAt: new Date("2026-08-14T10:00:00Z"),
       updatedAt: new Date("2026-08-14T10:00:00Z"),
@@ -215,7 +215,7 @@ describe("provider applications", () => {
       (error: unknown) =>
         error instanceof ProviderApplicationError &&
         error.code === "identityConflict" &&
-        error.safeContext === "Paseo",
+        error.safeContext === "Miko",
     );
     assert.equal(fixture.runtime.prepareCount("github"), 0);
   });
@@ -253,7 +253,7 @@ describe("provider applications", () => {
       (await resumed.applications.overview(request())).providers.github.identifiers,
       {
         appId: "42",
-        appSlug: "paseo",
+        appSlug: "miko",
         clientId: "client",
       },
     );
@@ -586,7 +586,7 @@ function createFixture(
   let verificationIdentity: ProviderApplicationIdentity = {
     provider: "github",
     id: "42",
-    name: "Paseo",
+    name: "Miko",
     ownerLogin: "acme",
   };
   const applications = createProviderApplications({
@@ -664,9 +664,9 @@ function identityFor(
   github: ProviderApplicationIdentity,
 ): ProviderApplicationIdentity {
   if (provider === "github") return github;
-  if (provider === "discord") return { provider, id: "100", name: "Paseo" };
-  if (provider === "linear") return { provider, id: "linear-client", name: "Paseo" };
-  return { provider, id: "A1", name: "Paseo" };
+  if (provider === "discord") return { provider, id: "100", name: "Miko" };
+  if (provider === "linear") return { provider, id: "linear-client", name: "Miko" };
+  return { provider, id: "A1", name: "Miko" };
 }
 
 function connectedInventory(applicationId: string) {

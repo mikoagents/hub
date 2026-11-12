@@ -128,29 +128,29 @@ type ApplicationFactory = () => ApplicationRuntime | Promise<ApplicationRuntime>
 
 declare global {
   // Vite reloads server modules inside one process. Keep the singleton alive across those reloads.
-  var paseoHubApplicationRuntime: Promise<ApplicationRuntime> | undefined;
+  var mikoHubApplicationRuntime: Promise<ApplicationRuntime> | undefined;
 }
 
 export function startApplication(factory: ApplicationFactory): Promise<ApplicationRuntime> {
-  globalThis.paseoHubApplicationRuntime ??= Promise.resolve().then(factory);
-  return globalThis.paseoHubApplicationRuntime;
+  globalThis.mikoHubApplicationRuntime ??= Promise.resolve().then(factory);
+  return globalThis.mikoHubApplicationRuntime;
 }
 
 export async function stopApplication(): Promise<void> {
-  const active = globalThis.paseoHubApplicationRuntime;
-  globalThis.paseoHubApplicationRuntime = undefined;
+  const active = globalThis.mikoHubApplicationRuntime;
+  globalThis.mikoHubApplicationRuntime = undefined;
   await (await active)?.stop();
 }
 
 export function hasApplication(): boolean {
-  return globalThis.paseoHubApplicationRuntime !== undefined;
+  return globalThis.mikoHubApplicationRuntime !== undefined;
 }
 
 export function getApplication(): Promise<ApplicationRuntime> {
-  if (globalThis.paseoHubApplicationRuntime === undefined) {
+  if (globalThis.mikoHubApplicationRuntime === undefined) {
     throw new Error("application is not started");
   }
-  return globalThis.paseoHubApplicationRuntime;
+  return globalThis.mikoHubApplicationRuntime;
 }
 
 export async function handleAuth(request: Request): Promise<Response> {

@@ -31,7 +31,7 @@ describe("the help popover's copy", () => {
     const markup = renderToStaticMarkup(<HelpChannels />);
 
     assert.match(markup, /href="https:\/\/discord\.gg\/[A-Za-z0-9]+"/u);
-    assert.match(markup, /#paseo-hub/u);
+    assert.match(markup, /#miko-hub/u);
     assert.match(markup, /href="mailto:hello@paseo\.sh"/u);
     assert.match(markup, />hello@paseo\.sh</u);
   });

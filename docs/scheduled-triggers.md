@@ -4,7 +4,7 @@ Schedules are declared in a [Trigger code project](programmable-triggers.md), al
 manual, custom and provider entries. One Trigger can declare one recurrence:
 
 ```ts
-import { defineTrigger } from "@getpaseo/hub/triggers";
+import { defineTrigger } from "@mikoagents/hub/triggers";
 
 export default defineTrigger({
   name: "daily-scan",

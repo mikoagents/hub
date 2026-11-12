@@ -10,11 +10,11 @@ connection:
 
 ```yaml
 env:
-  SOME_TOKEN: "${{ paseo.connections.some-connection.token }}"
+  SOME_TOKEN: "${{ miko.connections.some-connection.token }}"
 ```
 
 The expression shape is exactly
-`${{ paseo.connections.<connection-slug>.<named-value> }}`. Hub resolves it while
+`${{ miko.connections.<connection-slug>.<named-value> }}`. Hub resolves it while
 materializing the selected step, after the project and organization connection
 have been verified. The authored expression, not its resolved value, is retained
 in configuration and durable launch data. Resolved values are not placed in logs

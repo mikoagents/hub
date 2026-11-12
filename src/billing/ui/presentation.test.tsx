@@ -83,10 +83,10 @@ it("says which interval is missing rather than showing a blank price", () => {
 });
 
 it("keeps the plan name in the button's accessible name while the visible label stays short", () => {
-  const action = planAction({ planName: "Paseo Hub", price: dollars(1500), isCurrent: false });
+  const action = planAction({ planName: "Miko Hub", price: dollars(1500), isCurrent: false });
   assert.deepEqual(action, {
     label: "Subscribe",
-    name: "Subscribe to Paseo Hub",
+    name: "Subscribe to Miko Hub",
     disabled: false,
   });
   assert.ok(
@@ -101,9 +101,9 @@ it("disables the plan the organization is already on and names it", () => {
 });
 
 it("disables a plan the catalog does not price at the selected interval", () => {
-  assert.deepEqual(planAction({ planName: "Paseo Hub", price: null, isCurrent: false }), {
+  assert.deepEqual(planAction({ planName: "Miko Hub", price: null, isCurrent: false }), {
     label: "Not available",
-    name: "Not available: Paseo Hub",
+    name: "Not available: Miko Hub",
     disabled: true,
   });
 });

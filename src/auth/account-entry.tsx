@@ -181,7 +181,7 @@ function accountEntryPresentation(
     };
   }
   if (mode === "signIn") {
-    return { title: "Sign in to Paseo Hub", description: "Your agent operations, in one place." };
+    return { title: "Sign in to Miko Hub", description: "Your agent operations, in one place." };
   }
   return { title: "Create an account", description: "Get your agent operations in one place." };
 }
@@ -192,7 +192,7 @@ function readInvitationSignInRequest(): boolean {
   return (
     historyState !== null &&
     typeof historyState === "object" &&
-    Reflect.get(historyState, "paseoInvitationMode") === "sign-in"
+    Reflect.get(historyState, "mikoInvitationMode") === "sign-in"
   );
 }
 
@@ -249,7 +249,7 @@ function SignedOutFooter({
   const message =
     registration === "invite_only"
       ? "Accounts are created by invitation. Ask an organization owner to invite you."
-      : "Paseo Hub isn't accepting new accounts.";
+      : "Miko Hub isn't accepting new accounts.";
   return (
     <div className="grid gap-2 text-center text-sm text-muted-foreground">
       <p>{message}</p>
@@ -460,7 +460,7 @@ function useAccountCommandResult(
         const url = new URL(window.location.href);
         if (url.searchParams.has("invitation")) {
           window.history.replaceState(
-            Object.assign({}, window.history.state, { paseoInvitationMode: "sign-in" }),
+            Object.assign({}, window.history.state, { mikoInvitationMode: "sign-in" }),
             "",
             url,
           );

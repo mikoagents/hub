@@ -1,10 +1,10 @@
 #!/bin/sh
 set -eu
 
-image="paseo-hub-phase-zero-smoke-$$"
-container="paseo-hub-phase-zero-smoke-$$"
-database="paseo-hub-phase-zero-postgres-$$"
-network="paseo-hub-phase-zero-smoke-$$"
+image="miko-hub-phase-zero-smoke-$$"
+container="miko-hub-phase-zero-smoke-$$"
+database="miko-hub-phase-zero-postgres-$$"
+network="miko-hub-phase-zero-smoke-$$"
 smoke_password="local-smoke-postgres"
 
 cleanup() {
@@ -23,11 +23,11 @@ else
 fi
 docker run --detach --rm --cpus 1 --memory 512m --name "$database" --network "$network" \
   --env "POSTGRES_PASSWORD=$smoke_password" \
-  --env POSTGRES_DB=paseo_hub \
+  --env POSTGRES_DB=miko_hub \
   postgres:17-alpine >/dev/null
 
 attempt=0
-until docker exec "$database" pg_isready --username postgres --dbname paseo_hub >/dev/null 2>&1; do
+until docker exec "$database" pg_isready --username postgres --dbname miko_hub >/dev/null 2>&1; do
   attempt=$((attempt + 1))
   if [ "$attempt" -ge 30 ]; then
     docker logs "$database"
@@ -37,7 +37,7 @@ until docker exec "$database" pg_isready --username postgres --dbname paseo_hub 
 done
 
 docker run --detach --rm --cpus 1 --memory 768m --name "$container" --network "$network" \
-  --env "DATABASE_URL=postgres://postgres:$smoke_password@$database:5432/paseo_hub" \
+  --env "DATABASE_URL=postgres://postgres:$smoke_password@$database:5432/miko_hub" \
   --publish 127.0.0.1::3000 \
   "$image" >/dev/null
 

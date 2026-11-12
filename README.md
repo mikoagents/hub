@@ -1,21 +1,21 @@
 <p align="center">
-  <img src="https://paseo.sh/logo.svg" width="64" height="64" alt="Paseo logo">
+  <img src="https://paseo.sh/logo.svg" width="64" height="64" alt="Miko Hub logo">
 </p>
 
-<h1 align="center">Paseo Hub</h1>
+<h1 align="center">Miko Hub</h1>
 
 <p align="center">Run coding agents from GitHub, Linear, Slack, and Discord on your own Miko daemons.</p>
 
 <p align="center">
   <a href="https://paseo.sh/docs/hub">Docs</a> ·
-  <a href="https://github.com/getpaseo/paseo">Paseo</a> ·
+  <a href="https://github.com/mikoagents/miko-daemon">Miko</a> ·
   <a href="LICENSE">Apache 2.0</a>
 </p>
 
 > [!WARNING]
-> Paseo Hub is in early development. Expect breaking changes and data loss. [Join the Paseo Discord](https://discord.gg/jz8T2uahpH) to learn more about the project.
+> Miko Hub is in early development. Expect breaking changes and data loss. [Join the Miko Discord](https://discord.gg/jz8T2uahpH) to learn more about the project.
 
-Paseo Hub is the self-hosted automation layer for [Miko execution daemons](https://github.com/mikoagents/miko-daemon). Connect the services where work arrives and run agents on the machines where your development environments already live.
+Miko Hub is the self-hosted automation layer for [Miko execution daemons](https://github.com/mikoagents/miko-daemon). Connect the services where work arrives and run agents on the machines where your development environments already live.
 
 - **Your machines:** Hub dispatches to Miko daemons on your laptop, devbox, or build server, using each daemon's configured providers.
 - **Your configuration:** Keep triggers, environments, permissions, and prompts in version control.
@@ -24,7 +24,7 @@ Paseo Hub is the self-hosted automation layer for [Miko execution daemons](https
 
 ```text
  GitHub ─┐                 ┌─ laptop
- Linear ─┼─ Paseo Hub ────┼─ devbox
+ Linear ─┼─ Miko Hub ────┼─ devbox
  Slack  ─┤                 └─ build server
  Discord ┘
 ```
@@ -60,10 +60,10 @@ npm install
 npm run dev
 ```
 
-Open <http://localhost:3000>. Hub stores the embedded database and its generated authentication secret under `$XDG_DATA_HOME/paseo-hub`, falling back to `~/.local/share/paseo-hub`, and keeps both across restarts. Set `PASEO_HUB_DATA_DIR` to use a different directory, or set `DATABASE_URL` to use PostgreSQL instead:
+Open <http://localhost:3000>. Hub stores the embedded database and its generated authentication secret under `$XDG_DATA_HOME/miko-hub`, falling back to `~/.local/share/miko-hub`, and keeps both across restarts. Set `MIKO_HUB_DATA_DIR` to use a different directory, or set `DATABASE_URL` to use PostgreSQL instead:
 
 ```sh
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/paseo_hub npm run dev
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/miko_hub npm run dev
 ```
 
 Embedded mode supports one Hub process per data directory. Docker Compose continues to run Hub with PostgreSQL.
@@ -81,14 +81,14 @@ cp .env.example .env
 Set these values in `.env`:
 
 ```dotenv
-PASEO_HUB_APP_URL=https://hub.example.com
-PASEO_BOOTSTRAP_ORGANIZATION=My organization
-PASEO_BOOTSTRAP_OWNER_EMAIL=me@example.com
-PASEO_BOOTSTRAP_OWNER_PASSWORD=replace-with-a-temporary-password
+MIKO_HUB_APP_URL=https://hub.example.com
+MIKO_BOOTSTRAP_ORGANIZATION=My organization
+MIKO_BOOTSTRAP_OWNER_EMAIL=me@example.com
+MIKO_BOOTSTRAP_OWNER_PASSWORD=replace-with-a-temporary-password
 ```
 
 Hub generates and stores its authentication secret in the database. Advanced deployments may set
-`PASEO_HUB_AUTH_SECRET` to override it without replacing the stored secret.
+`MIKO_HUB_AUTH_SECRET` to override it without replacing the stored secret.
 
 Billing is optional: leave `STRIPE_SECRET_KEY` unset and Hub runs with no billing surface at all. See [docs/billing.md](docs/billing.md).
 
@@ -103,7 +103,7 @@ Then start Hub and PostgreSQL:
 docker compose up --build -d
 ```
 
-Open `PASEO_HUB_APP_URL`, sign in with the bootstrap account, and replace its temporary password. Connect a daemon with:
+Open `MIKO_HUB_APP_URL`, sign in with the bootstrap account, and replace its temporary password. Connect a daemon with:
 
 ```sh
 miko hub connect https://hub.example.com
@@ -122,7 +122,7 @@ shows read-only source and revisions, enable/disable and manual actions; Activit
 steps, results, runner logs and agent conversations.
 
 ```ts
-import { defineTrigger } from "@getpaseo/hub/triggers";
+import { defineTrigger } from "@mikoagents/hub/triggers";
 
 export default defineTrigger({
   name: "hello",

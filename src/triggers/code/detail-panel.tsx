@@ -118,7 +118,9 @@ export function TriggerDetailPanel({ triggerId }: { triggerId: string }) {
           </NoticeAlert>
         )}
       </Section>
-      {manifest ? <TriggerSettings manifest={manifest} inspection={data.inspection} /> : null}
+      {manifest ? (
+        <TriggerSettings manifest={manifest} inspection={data.inspection} version={data.version} />
+      ) : null}
       <Section title="Run history" description="Open a run to see its result, steps and logs.">
         <TriggerRunHistory organizationSlug={organizationSlug} triggerId={triggerId} />
       </Section>

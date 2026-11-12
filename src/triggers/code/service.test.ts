@@ -35,7 +35,7 @@ describe("code-authored Triggers", () => {
     );
     await writeFile(
       join(root, "workflow.ts"),
-      `import { defineTrigger } from "@getpaseo/hub/triggers";
+      `import { defineTrigger } from "@mikoagents/hub/triggers";
       import { multiply } from "./helper";
       import { z } from "zod";
       export default defineTrigger({ name: "typed", runner: "local", grants: {}, on: [{source:"manual",event:"run"}], limits: {maxRuntime:"1h"}, async run(ctx) { return multiply(z.number().parse(ctx.event.payload)); } });`,

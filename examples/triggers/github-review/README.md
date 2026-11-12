@@ -5,8 +5,8 @@ the target, native agent settings and repository grants before deploying. The ex
 authors outside `trustedAuthors` and checks actual GitHub Review receipts and comment counts.
 
 ```sh
-paseo-hub trigger check examples/triggers/github-review/trigger.ts
-paseo-hub trigger deploy examples/triggers/github-review/trigger.ts --url <test-hub-url> --token-file <test-organization-key>
+miko trigger check examples/triggers/github-review/trigger.ts
+miko trigger deploy examples/triggers/github-review/trigger.ts --url <test-hub-url> --token-file <test-organization-key>
 ```
 
 The workflow holds a durable PR lock, waits for CI without occupying a runner worker, reviews

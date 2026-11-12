@@ -74,7 +74,7 @@ for (const theme of ["light", "dark"] as const) {
   }) => {
     await page.emulateMedia({ colorScheme: theme === "light" ? "dark" : "light" });
     await page.addInitScript((preference) => {
-      localStorage.setItem("paseo-hub-theme", preference);
+      localStorage.setItem("miko-hub-theme", preference);
     }, theme);
     await page.route(/\.js(?:\?|$)/u, (route) => route.abort());
     await hub.visitHome();

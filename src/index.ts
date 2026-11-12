@@ -265,10 +265,10 @@ async function initializeDatabaseRuntime(
 }
 
 function loadRuntimeConfig(): RuntimeConfig {
-  const trustedClientIpHeader = process.env["PASEO_HUB_TRUSTED_CLIENT_IP_HEADER"];
+  const trustedClientIpHeader = process.env["MIKO_HUB_TRUSTED_CLIENT_IP_HEADER"];
   if (trustedClientIpHeader !== undefined) validateHeaderName(trustedClientIpHeader);
   return {
-    bind: process.env["PASEO_HUB_BIND"] ?? "0.0.0.0",
+    bind: process.env["MIKO_HUB_BIND"] ?? "0.0.0.0",
     ...(trustedClientIpHeader === undefined ? {} : { trustedClientIpHeader }),
     authPolicy: readInstanceAuthPolicy(process.env),
   };
@@ -284,8 +284,8 @@ async function resolveHubIdentity(
   database: DatabaseRuntime,
   effectivePort: number,
 ): Promise<HubIdentity> {
-  const configuredAppUrl = nonEmptyEnvironment(process.env["PASEO_HUB_APP_URL"]);
-  const configuredAuthSecret = process.env["PASEO_HUB_AUTH_SECRET"];
+  const configuredAppUrl = nonEmptyEnvironment(process.env["MIKO_HUB_APP_URL"]);
+  const configuredAuthSecret = process.env["MIKO_HUB_AUTH_SECRET"];
   const configuration = createRuntimeConfiguration({
     database,
     environment: {
@@ -312,7 +312,7 @@ async function main(): Promise<void> {
   await build.startProductionRuntime();
   const config = loadRuntimeConfig();
   const port = readPort();
-  const canonicalRequestOrigin = nonEmptyEnvironment(process.env["PASEO_HUB_APP_URL"]);
+  const canonicalRequestOrigin = nonEmptyEnvironment(process.env["MIKO_HUB_APP_URL"]);
   const server = createFetchServer((request) => build.default.fetch(request), {
     ...(config.trustedClientIpHeader === undefined
       ? {}
@@ -326,8 +326,7 @@ async function main(): Promise<void> {
       handle: () => build.handleDaemonUpgrade(request, socket, head),
     });
   });
-  const appUrl =
-    nonEmptyEnvironment(process.env["PASEO_HUB_APP_URL"]) ?? `http://localhost:${port}`;
+  const appUrl = nonEmptyEnvironment(process.env["MIKO_HUB_APP_URL"]) ?? `http://localhost:${port}`;
   server.listen(port, config.bind, () => {
     logger.info(`server started, available at: ${appUrl}`);
   });

@@ -21,16 +21,16 @@ describe("optional Resend email delivery", () => {
     assert.deepEqual(
       readResendConfig({
         RESEND_API_KEY: " re_test_abc123 ",
-        RESEND_FROM: " Paseo <mail@example.com> ",
+        RESEND_FROM: " Miko Hub <mail@example.com> ",
       }),
-      { apiKey: "re_test_abc123", from: "Paseo <mail@example.com>" },
+      { apiKey: "re_test_abc123", from: "Miko Hub <mail@example.com>" },
     );
   });
 
   it("delivers the message through the configured provider", async () => {
     let request: { input: string; init: RequestInit } | undefined;
     const delivery = createResendEmailDelivery(
-      { apiKey: "re_test_abc123", from: "Paseo <mail@example.com>" },
+      { apiKey: "re_test_abc123", from: "Miko Hub <mail@example.com>" },
       (input, init = {}) => {
         let inputUrl: string;
         if (typeof input === "string") inputUrl = input;
@@ -71,7 +71,7 @@ describe("optional Resend email delivery", () => {
           .parse(JSON.parse(body));
       })(),
       {
-        from: "Paseo <mail@example.com>",
+        from: "Miko Hub <mail@example.com>",
         to: ["person@example.com"],
         subject: "Subject",
         text: "Text",

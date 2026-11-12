@@ -41,20 +41,20 @@ inputs:
     choices: [codex-safe, claude]
 steps:
   - id: work
-    environment: \${{ paseo.inputs.repo }}
+    environment: \${{ miko.inputs.repo }}
     max_runtime: 30m
     idle_timeout: 5m
-    agent: \${{ paseo.inputs.agent }}
+    agent: \${{ miko.inputs.agent }}
     prompt:
       - include: partials/shared.md
-      - text: "Request: \${{ paseo.prompt }}"
+      - text: "Request: \${{ miko.prompt }}"
 `;
 
 function canonicalFiles() {
   return [
-    { path: ".paseo/workflows/route.yml", content: workflow },
-    { path: ".paseo/workflows/partials/shared.md", content: "Keep context exact." },
-    { path: ".paseo/hub.yml", content: hub },
+    { path: ".miko/workflows/route.yml", content: workflow },
+    { path: ".miko/workflows/partials/shared.md", content: "Keep context exact." },
+    { path: ".miko/hub.yml", content: hub },
   ];
 }
 
@@ -69,7 +69,7 @@ function filesWithWorkflow(content: string) {
 
 function filesWithHub(content: string) {
   const files = canonicalFiles();
-  const index = files.findIndex(({ path }) => path === ".paseo/hub.yml");
+  const index = files.findIndex(({ path }) => path === ".miko/hub.yml");
   const current = files[index];
   if (current === undefined) throw new Error("canonical Hub fixture is missing");
   files[index] = { path: current.path, content };
@@ -106,7 +106,7 @@ describe("Hub configuration bundle", () => {
         (error) =>
           hasBundleIssue(
             error,
-            ".paseo/hub.yml.name",
+            ".miko/hub.yml.name",
             /lowercase letters, numbers, and single hyphens|too big/iu,
           ),
       );
@@ -122,11 +122,11 @@ describe("Hub configuration bundle", () => {
       bundle.configuration.environments.map(({ name }) => name),
       ["hub", "paseo"],
     );
-    assert.equal(trigger.sourceFile, ".paseo/workflows/route.yml");
-    assert.equal(step.environment, "${{ paseo.inputs.repo }}");
+    assert.equal(trigger.sourceFile, ".miko/workflows/route.yml");
+    assert.equal(step.environment, "${{ miko.inputs.repo }}");
     assert.ok("selector" in step.agent);
     if (!("selector" in step.agent)) return;
-    assert.equal(step.agent.selector, "${{ paseo.inputs.agent }}");
+    assert.equal(step.agent.selector, "${{ miko.inputs.agent }}");
     assert.deepEqual(Object.keys(step.agent.choices), ["claude", "codex-safe"]);
     assert.deepEqual(step.agent.choices["codex-safe"]?.options, {
       sandbox_workspace_write: {
@@ -136,7 +136,7 @@ describe("Hub configuration bundle", () => {
     });
     assert.deepEqual(step.prompt[0], {
       kind: "partial",
-      path: ".paseo/workflows/partials/shared.md",
+      path: ".miko/workflows/partials/shared.md",
       content: "Keep context exact.",
       contentHash: "4d64ca5298d18aaf016856e6579d80ec097e276c0acf1fa061689b0643844b8d",
     });
@@ -144,24 +144,24 @@ describe("Hub configuration bundle", () => {
 
   it("rejects monolithic triggers with a direct migration error", () => {
     assert.throws(
-      () => compileHubBundle([{ path: ".paseo/hub.yml", content: `${hub}\ntriggers: []\n` }]),
+      () => compileHubBundle([{ path: ".miko/hub.yml", content: `${hub}\ntriggers: []\n` }]),
       (error) =>
         hasBundleIssue(
           error,
-          ".paseo/hub.yml.triggers",
-          /move each trigger to \.paseo\/workflows\/<workflow>\.yml/iu,
+          ".miko/hub.yml.triggers",
+          /move each trigger to \.miko\/workflows\/<workflow>\.yml/iu,
         ),
     );
   });
 
   it("rejects a resource document without a direct workflow document", () => {
     assert.throws(
-      () => compileHubBundle([{ path: ".paseo/hub.yml", content: hub }]),
+      () => compileHubBundle([{ path: ".miko/hub.yml", content: hub }]),
       (error) =>
         hasBundleIssue(
           error,
-          ".paseo/workflows",
-          /at least one direct \.paseo\/workflows\/<workflow>\.yml/iu,
+          ".miko/workflows",
+          /at least one direct \.miko\/workflows\/<workflow>\.yml/iu,
         ),
     );
   });
@@ -178,8 +178,8 @@ describe("Hub configuration bundle", () => {
       },
       {
         source: workflow.replace(
-          "agent: ${{ paseo.inputs.agent }}",
-          "agent:\n      provider: ${{ paseo.inputs.agent }}",
+          "agent: ${{ miko.inputs.agent }}",
+          "agent:\n      provider: ${{ miko.inputs.agent }}",
         ),
         expected: /dynamic inline agent configurations are not allowed/iu,
       },
@@ -194,10 +194,10 @@ describe("Hub configuration bundle", () => {
     const second = workflow.replace("route-request", "another-request");
     const left = compileHubBundle([
       ...canonicalFiles(),
-      { path: ".paseo/workflows/a.yml", content: second },
+      { path: ".miko/workflows/a.yml", content: second },
     ]);
     const right = compileHubBundle([
-      { path: ".paseo/workflows/a.yml", content: second },
+      { path: ".miko/workflows/a.yml", content: second },
       ...canonicalFiles().toReversed(),
     ]);
 
@@ -217,13 +217,13 @@ describe("Hub configuration bundle", () => {
       () =>
         compileHubBundle([
           ...canonicalFiles(),
-          { path: ".paseo/workflows/duplicate.yml", content: workflow },
+          { path: ".miko/workflows/duplicate.yml", content: workflow },
         ]),
       (error) =>
         hasBundleIssue(
           error,
-          ".paseo/workflows/route.yml.name",
-          /\.paseo\/workflows\/duplicate\.yml/u,
+          ".miko/workflows/route.yml.name",
+          /\.miko\/workflows\/duplicate\.yml/u,
         ),
     );
   });
@@ -233,7 +233,7 @@ describe("Hub configuration bundle", () => {
     assert.throws(
       () => compileHubBundle(filesWithWorkflow(malformedWorkflow)),
       (error) =>
-        hasBundleIssue(error, ".paseo/workflows/route.yml.name", /expected.*string|required/iu),
+        hasBundleIssue(error, ".miko/workflows/route.yml.name", /expected.*string|required/iu),
     );
 
     const malformedEnvironment = hub.replace("    cwd: /workspace/paseo\n", "");
@@ -242,7 +242,7 @@ describe("Hub configuration bundle", () => {
       (error) =>
         hasBundleIssue(
           error,
-          ".paseo/hub.yml.environments.paseo.cwd",
+          ".miko/hub.yml.environments.paseo.cwd",
           /expected.*string|required/iu,
         ),
     );
@@ -250,15 +250,15 @@ describe("Hub configuration bundle", () => {
 
   it("attributes malformed expressions to their conceptual authored workflow field", () => {
     const malformedExpression = workflow.replace(
-      "    agent: ${{ paseo.inputs.agent }}",
-      "    agent: ${{ paseo.inputs.agent + }}",
+      "    agent: ${{ miko.inputs.agent }}",
+      "    agent: ${{ miko.inputs.agent + }}",
     );
     assert.throws(
       () => compileHubBundle(filesWithWorkflow(malformedExpression)),
       (error) =>
         hasBundleIssue(
           error,
-          ".paseo/workflows/route.yml.steps.work.agent",
+          ".miko/workflows/route.yml.steps.work.agent",
           /expression|unexpected|expected/iu,
         ),
     );
@@ -267,15 +267,15 @@ describe("Hub configuration bundle", () => {
   it("attributes unsupported worktree expressions to the exact Hub source field", () => {
     const unsupported = hub.replace(
       "    cwd: /workspace/paseo",
-      '    cwd: /workspace/paseo\n    worktree:\n      mode: branch-off\n      newBranch: "trigger-${{ paseo.event.github.delivery_id }}"',
+      '    cwd: /workspace/paseo\n    worktree:\n      mode: branch-off\n      newBranch: "trigger-${{ miko.event.github.delivery_id }}"',
     );
     assert.throws(
       () => compileHubBundle(filesWithHub(unsupported)),
       (error) =>
         hasBundleIssue(
           error,
-          ".paseo/hub.yml.environments.paseo.worktree.newBranch",
-          /unsupported path paseo\.event\.github\.delivery_id/iu,
+          ".miko/hub.yml.environments.paseo.worktree.newBranch",
+          /unsupported path miko\.event\.github\.delivery_id/iu,
         ),
     );
   });
@@ -286,19 +286,19 @@ describe("Hub configuration bundle", () => {
         compileHubBundle([
           ...canonicalFiles(),
           {
-            path: ".paseo/workflows/partials/orphan.md",
+            path: ".miko/workflows/partials/orphan.md",
             content: "Never silently injected.",
           },
         ]),
-      (error) => hasBundleIssue(error, ".paseo/workflows/partials/orphan.md", /not referenced/iu),
+      (error) => hasBundleIssue(error, ".miko/workflows/partials/orphan.md", /not referenced/iu),
     );
   });
 
   it.each([
-    [".paseo/hub.toml", "TOML is not accepted"],
-    [".paseo/workflows/nested/run.yml", "direct child"],
-    [".paseo/workflows/run.yaml", "must use the .yml extension"],
-    [".paseo/workflows/partials/safety.txt", "must use the .md extension"],
+    [".miko/hub.toml", "TOML is not accepted"],
+    [".miko/workflows/nested/run.yml", "direct child"],
+    [".miko/workflows/run.yaml", "must use the .yml extension"],
+    [".miko/workflows/partials/safety.txt", "must use the .md extension"],
     ["../hub.yml", "unsafe bundle path"],
   ])("rejects non-canonical bundle path %s", (path, message) => {
     assert.throws(

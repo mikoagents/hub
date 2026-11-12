@@ -179,9 +179,9 @@ describe("daemon enrollment and execution", () => {
     });
     assert.deepEqual(agent.env, {
       USER_DEFINED: "yes",
-      PASEO_AGENT_PROVIDER: "opencode",
-      PASEO_AGENT_MODE: "full-access",
-      PASEO_HUB_CONFIG_JSON: JSON.stringify({
+      MIKO_AGENT_PROVIDER: "opencode",
+      MIKO_AGENT_MODE: "full-access",
+      MIKO_HUB_CONFIG_JSON: JSON.stringify({
         triggers: [{ name: "discord-ping" }],
       }),
     });
@@ -260,7 +260,7 @@ describe("daemon enrollment and execution", () => {
     assert.equal(launch.modeId, undefined);
     assert.deepEqual(launch.providerOptions, options);
     assert.deepEqual(persisted.launchIntent?.agent, { provider: "codex", options });
-    assert.equal(isRecord(launch.env) ? launch.env["PASEO_AGENT_MODE"] : undefined, undefined);
+    assert.equal(isRecord(launch.env) ? launch.env["MIKO_AGENT_MODE"] : undefined, undefined);
   });
 
   it("preserves the ordinary daemon provider-option validation error", async () => {
@@ -368,7 +368,7 @@ describe("daemon enrollment and execution", () => {
             "Report unsuccessful work with its reason. Omit output when reporting failure.",
         },
         output: {
-          $id: "urn:paseo:hub:finish-execution-output",
+          $id: "urn:miko:hub:finish-execution-output",
           type: "object",
           additionalProperties: false,
           required: ["repo"],
@@ -518,7 +518,7 @@ describe("daemon enrollment and execution", () => {
     await hub.connectDaemon();
     const handedOff = await hub.handoff({
       env: {
-        SOME_TOKEN: "prefix-${{ paseo.connections.some-connection.token }}",
+        SOME_TOKEN: "prefix-${{ miko.connections.some-connection.token }}",
       },
       github: {
         connection: "getpaseo-github",
@@ -531,10 +531,10 @@ describe("daemon enrollment and execution", () => {
 
     const persisted = await hub.execution(handedOff.execution.id);
     const persistedIntent = JSON.stringify(persisted.launchIntent);
-    assert.match(persistedIntent, /paseo\.connections\.some-connection\.token/iu);
+    assert.match(persistedIntent, /miko\.connections\.some-connection\.token/iu);
     assert.doesNotMatch(persistedIntent, /resolved-secret|durable-scoped-token/iu);
     assert.deepEqual(persisted.launchIntent?.env, {
-      SOME_TOKEN: "prefix-${{ paseo.connections.some-connection.token }}",
+      SOME_TOKEN: "prefix-${{ miko.connections.some-connection.token }}",
     });
     assert.deepEqual(persisted.launchIntent?.github, {
       connection: "getpaseo-github",
@@ -684,7 +684,7 @@ describe("daemon enrollment and execution", () => {
     hub.hangAuthorityMintPermanently();
     const dispatch = hub.beginDispatch({
       startupTimeoutMs: 30_000,
-      env: { TOKEN: "${{ paseo.connections.some-connection.token }}" },
+      env: { TOKEN: "${{ miko.connections.some-connection.token }}" },
       github: {
         connection: "getpaseo-github",
         repositories: ["getpaseo/paseo"],

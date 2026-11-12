@@ -79,7 +79,7 @@ describe("first-run claim at the browser boundary", () => {
       assert.equal(appSetup.status, "appSetupRequired");
       // App setup already resolves the organization the daemon handoff has to address, and it is
       // the same one the dashboard opens on — the handoff never re-resolves it.
-      assert.match(appSetup.organization?.slug ?? "", /^paseo-hub-[0-9a-f]{8}$/u);
+      assert.match(appSetup.organization?.slug ?? "", /^miko-hub-[0-9a-f]{8}$/u);
       await instance.auth.completeAppOnboarding!(
         new Request(`${ORIGIN}/`, {
           method: "POST",
@@ -89,7 +89,7 @@ describe("first-run claim at the browser boundary", () => {
       const active = await readAccountState(instance.auth, cookie);
       assert.equal(active.status, "active");
       assert.equal(active.account?.email, operator.email);
-      assert.equal(active.organization?.name, "Paseo Hub");
+      assert.equal(active.organization?.name, "Miko Hub");
       assert.equal(active.organization?.slug, appSetup.organization?.slug);
       assert.equal(active.isInstanceOperator, true);
 
@@ -103,7 +103,7 @@ describe("first-run claim at the browser boundary", () => {
          join organization on organization.id = instance_bootstrap.organization_id`,
       );
       assert.deepEqual(storedNames.rows, [
-        { account_name: "browser.operator", organization_name: "Paseo Hub" },
+        { account_name: "browser.operator", organization_name: "Miko Hub" },
       ]);
     } finally {
       await instance.close();
@@ -298,7 +298,7 @@ function browserHeaders(): Headers {
 async function readAccountState(auth: AuthServer, cookie?: string) {
   const response = await auth.browserAccount!(
     new Request(
-      `${ORIGIN}/api/auth/paseo/state`,
+      `${ORIGIN}/api/auth/miko/state`,
       cookie === undefined ? {} : { headers: { cookie } },
     ),
   );

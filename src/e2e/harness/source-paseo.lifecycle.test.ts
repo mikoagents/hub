@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { describe, it } from "vitest";
 import { stopProcess } from "./source-paseo.js";
 
-describe("source Paseo process ownership", () => {
+describe("source Miko process ownership", () => {
   it("terminates a detached agent CLI child tree", async () => {
     const parent = spawn(
       process.execPath,

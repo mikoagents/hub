@@ -53,8 +53,8 @@ const PRODUCTS: StripeCatalogProduct[] = [
     name: "Free",
     active: true,
     metadata: {
-      paseo_plan: "true",
-      paseo_plan_slug: "free",
+      miko_plan: "true",
+      miko_plan_slug: "free",
       ent_seats_max: "1",
       ent_can_invite: "false",
       ent_executions_monthly_limit: "0",
@@ -65,8 +65,8 @@ const PRODUCTS: StripeCatalogProduct[] = [
     name: "Solo",
     active: true,
     metadata: {
-      paseo_plan: "true",
-      paseo_plan_slug: "solo",
+      miko_plan: "true",
+      miko_plan_slug: "solo",
       ent_seats_max: "unlimited",
       ent_can_invite: "true",
       ent_executions_monthly_limit: "2000",
@@ -77,8 +77,8 @@ const PRODUCTS: StripeCatalogProduct[] = [
     name: "Team",
     active: true,
     metadata: {
-      paseo_plan: "true",
-      paseo_plan_slug: "team",
+      miko_plan: "true",
+      miko_plan_slug: "team",
       ent_seats_max: "unlimited",
       ent_can_invite: "true",
       ent_executions_monthly_limit: "unlimited",

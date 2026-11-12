@@ -71,7 +71,7 @@ const freePlan: SyncBillingPlanInput = {
 const hostedPlan: SyncBillingPlanInput = {
   id: "prod_hosted",
   slug: "hosted",
-  name: "Paseo Hub",
+  name: "Miko Hub",
   template: {
     seats: { max: null },
     canInviteMembers: true,
@@ -137,7 +137,7 @@ describe("BillingRuntime.publicCatalog", () => {
       catalog.find((plan) => plan.slug === "hosted"),
       {
         slug: "hosted",
-        name: "Paseo Hub",
+        name: "Miko Hub",
         billing: {
           model: "per_unit",
           unit: {

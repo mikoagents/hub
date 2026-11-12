@@ -14,8 +14,8 @@ const LOCAL_WORKSPACE_FILES = [".env", "AGENTS.override.md", "CLAUDE.local.md"];
  */
 const UNCONFIGURED = [
   "DATABASE_URL",
-  "PASEO_HUB_APP_URL",
-  "PASEO_HUB_AUTH_SECRET",
+  "MIKO_HUB_APP_URL",
+  "MIKO_HUB_AUTH_SECRET",
   "GITHUB_APP_ID",
   "GITHUB_APP_SLUG",
   "GITHUB_APP_CLIENT_ID",
@@ -30,9 +30,9 @@ const UNCONFIGURED = [
   "DISCORD_CLIENT_ID",
   "DISCORD_CLIENT_SECRET",
   "DISCORD_BOT_TOKEN",
-  "PASEO_BOOTSTRAP_ORGANIZATION",
-  "PASEO_BOOTSTRAP_OWNER_EMAIL",
-  "PASEO_BOOTSTRAP_OWNER_PASSWORD",
+  "MIKO_BOOTSTRAP_ORGANIZATION",
+  "MIKO_BOOTSTRAP_OWNER_EMAIL",
+  "MIKO_BOOTSTRAP_OWNER_PASSWORD",
 ];
 
 /**
@@ -53,7 +53,7 @@ export function planWorkspaceAction(action, options) {
     return {
       command: "npm",
       args: ["run", "dev", "--", "--host", host, "--port", port],
-      environment: { PASEO_HUB_APP_URL: options.appUrl ?? `http://127.0.0.1:${port}` },
+      environment: { MIKO_HUB_APP_URL: options.appUrl ?? `http://127.0.0.1:${port}` },
       build: false,
     };
   }
@@ -63,8 +63,8 @@ export function planWorkspaceAction(action, options) {
       args: ["dist/index.js"],
       environment: {
         PORT: port,
-        PASEO_HUB_BIND: host,
-        PASEO_HUB_DATA_DIR: join(root, ".dev", "operator-app-evidence", "runtime"),
+        MIKO_HUB_BIND: host,
+        MIKO_HUB_DATA_DIR: join(root, ".dev", "operator-app-evidence", "runtime"),
         ...Object.fromEntries(UNCONFIGURED.map((name) => [name, ""])),
       },
       build: true,

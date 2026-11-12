@@ -59,7 +59,7 @@ export function TriggerActivityPanel() {
     setValue: setFilter,
     ready,
   } = usePersistedChoice(
-    `paseo-hub-activity-status:${tenant.organization.id}`,
+    `miko-hub-activity-status:${tenant.organization.id}`,
     ACTIVITY_STATUS_FILTERS,
     "all",
   );

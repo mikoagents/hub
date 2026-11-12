@@ -90,7 +90,7 @@ function billingLockKey(organizationId: string): string {
 /**
  * The Free plan: what a hosted organization is provisioned with, what it keeps until it
  * subscribes, and what a terminal cancellation returns it to. Identified by its
- * `paseo_plan_slug` metadata and mirrored as `billing_plans.slug`, so its seats, invitations, and
+ * `miko_plan_slug` metadata and mirrored as `billing_plans.slug`, so its seats, invitations, and
  * monthly execution allowance are authored in the Stripe dashboard rather than hardcoded here.
  *
  * It never expires and carries no Stripe subscription: an organization on Free has nothing for

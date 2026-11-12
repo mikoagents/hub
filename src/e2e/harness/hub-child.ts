@@ -43,7 +43,7 @@ async function main(): Promise<void> {
   );
   await runtime.query(
     `insert into "user" (id, name, email, email_verified)
-     values ('hub-e2e', 'Hub E2E', 'hub-e2e@paseo.test', true)
+     values ('hub-e2e', 'Hub E2E', 'hub-e2e@miko.test', true)
      on conflict (id) do nothing`,
   );
   await runtime.query(
@@ -72,8 +72,8 @@ async function main(): Promise<void> {
     database: runtime,
     locks,
     entitlements: entitlements.service,
-    baseURL: requiredEnvironment("PASEO_HUB_APP_URL"),
-    secret: requiredEnvironment("PASEO_HUB_AUTH_SECRET"),
+    baseURL: requiredEnvironment("MIKO_HUB_APP_URL"),
+    secret: requiredEnvironment("MIKO_HUB_AUTH_SECRET"),
     policy: readInstanceAuthPolicy(process.env),
   });
   await auth.initialize?.();
@@ -162,7 +162,7 @@ async function main(): Promise<void> {
           `${outputFile}.authority`,
           `${JSON.stringify({ action: "mint", token })}\n`,
         );
-        return { token, expiresAt: Date.now() + 3600_000, botUserId: 123, botLogin: "paseo[bot]" };
+        return { token, expiresAt: Date.now() + 3600_000, botUserId: 123, botLogin: "miko[bot]" };
       },
       revoke: async (token) => {
         await appendFile(
@@ -230,8 +230,8 @@ async function main(): Promise<void> {
         },
       },
     ],
-    publicBaseUrl: requiredEnvironment("PASEO_HUB_APP_URL"),
-    completionTokenSecret: requiredEnvironment("PASEO_HUB_AUTH_SECRET"),
+    publicBaseUrl: requiredEnvironment("MIKO_HUB_APP_URL"),
+    completionTokenSecret: requiredEnvironment("MIKO_HUB_AUTH_SECRET"),
     browserOrganizationAccess: auth,
   });
   const hub = application.hub;

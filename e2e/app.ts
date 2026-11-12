@@ -10,7 +10,7 @@ import { mkdir, mkdtemp, open, readFile, rm, unlink } from "node:fs/promises";
 import { promisify } from "node:util";
 import { test as base } from "@playwright/test";
 import { z } from "zod";
-import { PaseoHub, type BuiltApplication, type BuiltApplicationOptions } from "./helpers/hub.js";
+import { MikoHub, type BuiltApplication, type BuiltApplicationOptions } from "./helpers/hub.js";
 import { SourcePaseo } from "./helpers/source-paseo.js";
 import type { BrowserDiscordEvent } from "../src/e2e/harness/browser-providers.js";
 import type { BrowserProviderScenario } from "../src/e2e/harness/browser-providers.js";
@@ -21,7 +21,7 @@ const billingInspectSchema = z.object({ reportedSeatQuantity: z.number().nullabl
 const slackSocketEvidenceSchema = z.object({ receipts: z.number(), runs: z.number() });
 
 export const test = base.extend<{
-  hub: PaseoHub;
+  hub: MikoHub;
   projectExternal: ProjectExternalFacts;
   billing: boolean;
   providerScenario: BrowserProviderScenario;
@@ -53,7 +53,7 @@ export const test = base.extend<{
         providerScenario,
       });
       await provide(
-        new PaseoHub(
+        new MikoHub(
           primary,
           browser,
           page,
@@ -251,49 +251,49 @@ function applicationEnvironment(input: ApplicationEnvironmentInput): NodeJS.Proc
   const environment: NodeJS.ProcessEnv = {
     ...isolatedProcessEnvironment(),
     PORT: String(input.port),
-    PASEO_HUB_BIND: "127.0.0.1",
-    PASEO_REGISTRATION_MODE:
+    MIKO_HUB_BIND: "127.0.0.1",
+    MIKO_REGISTRATION_MODE:
       input.registrationMode ?? (input.bootstrap === undefined ? "open" : "invite_only"),
-    PASEO_ORGANIZATION_CREATION:
+    MIKO_ORGANIZATION_CREATION:
       input.organizationCreation ?? (input.bootstrap === undefined ? "open" : "disabled"),
-    PASEO_HUB_AUTH_SECRET: browserAuthEnabled
+    MIKO_HUB_AUTH_SECRET: browserAuthEnabled
       ? "phase-zero-playwright-secret-at-least-32-characters"
       : `phase-zero-isolated-disabled-auth-${randomUUID()}`,
-    PASEO_BROWSER_AUTH_ENABLED: String(browserAuthEnabled),
-    PASEO_MACHINE_AUTH_ENABLED: String(input.machineAuth !== false),
-    PASEO_E2E_MACHINE_KEY_FILE: input.machineKeyFile,
-    PASEO_E2E_DATABASE_PROFILE: input.databaseProfile ?? "legacy",
+    MIKO_BROWSER_AUTH_ENABLED: String(browserAuthEnabled),
+    MIKO_MACHINE_AUTH_ENABLED: String(input.machineAuth !== false),
+    MIKO_E2E_MACHINE_KEY_FILE: input.machineKeyFile,
+    MIKO_E2E_DATABASE_PROFILE: input.databaseProfile ?? "legacy",
     GITHUB_WEBHOOK_SECRET: "phase-zero-webhook-secret",
-    PASEO_E2E_SLACK_SIGNING_SECRET: "phase-zero-slack-webhook-secret",
+    MIKO_E2E_SLACK_SIGNING_SECRET: "phase-zero-slack-webhook-secret",
     STRIPE_WEBHOOK_SECRET: "whsec_phase_zero_fixture_secret",
-    PASEO_BROWSER_BILLING_SCENARIO: input.billing === true ? "configured" : "unconfigured",
-    PASEO_BROWSER_PROVIDER_SCENARIO:
+    MIKO_BROWSER_BILLING_SCENARIO: input.billing === true ? "configured" : "unconfigured",
+    MIKO_BROWSER_PROVIDER_SCENARIO:
       input.providerScenario ??
       (input.providerConnections === false
         ? "not-configured"
         : input.githubApprovalRequired === true
           ? "approval"
           : "connected"),
-    PASEO_BROWSER_PROVIDER_APPS: input.providerApplications === true ? "dynamic" : "static",
+    MIKO_BROWSER_PROVIDER_APPS: input.providerApplications === true ? "dynamic" : "static",
     ...(input.reverseProxy === true
-      ? { PASEO_HUB_TRUSTED_CLIENT_IP_HEADER: "x-paseo-e2e-client-ip" }
+      ? { MIKO_HUB_TRUSTED_CLIENT_IP_HEADER: "x-miko-e2e-client-ip" }
       : {}),
     ...(input.tls === undefined
       ? {}
-      : { PASEO_E2E_TLS_KEY: input.tls.key, PASEO_E2E_TLS_CERT: input.tls.cert }),
+      : { MIKO_E2E_TLS_KEY: input.tls.key, MIKO_E2E_TLS_CERT: input.tls.cert }),
     ...environmentAppVariables(input.environmentApps ?? []),
     ...(input.bootstrap === undefined
       ? {}
       : {
-          PASEO_BOOTSTRAP_ORGANIZATION: input.bootstrap.organizationName,
-          PASEO_BOOTSTRAP_OWNER_EMAIL: input.bootstrap.ownerEmail,
-          PASEO_BOOTSTRAP_OWNER_PASSWORD: input.bootstrap.ownerPassword,
+          MIKO_BOOTSTRAP_ORGANIZATION: input.bootstrap.organizationName,
+          MIKO_BOOTSTRAP_OWNER_EMAIL: input.bootstrap.ownerEmail,
+          MIKO_BOOTSTRAP_OWNER_PASSWORD: input.bootstrap.ownerPassword,
         }),
   };
   delete environment["DATABASE_URL"];
-  environment["PASEO_HUB_DATA_DIR"] = input.dataDirectory;
-  if (input.appUrl === undefined) delete environment["PASEO_HUB_APP_URL"];
-  else environment["PASEO_HUB_APP_URL"] = input.appUrl;
+  environment["MIKO_HUB_DATA_DIR"] = input.dataDirectory;
+  if (input.appUrl === undefined) delete environment["MIKO_HUB_APP_URL"];
+  else environment["MIKO_HUB_APP_URL"] = input.appUrl;
   return environment;
 }
 
@@ -454,7 +454,7 @@ async function startReverseProxy(
             host: `127.0.0.1:${targetPort}`,
             "x-forwarded-host": incoming.headers.host,
             "x-forwarded-proto": "https",
-            "x-paseo-e2e-client-ip": "127.0.0.1",
+            "x-miko-e2e-client-ip": "127.0.0.1",
           },
         },
         (response) => {

@@ -57,7 +57,7 @@ it("user queues CI follow-ups through the workflow engine without duplicate or o
             max_runtime: "30m",
             idle_timeout: "5m",
             agent: { provider: "codex" },
-            prompt: [{ text: "Repair ${{ paseo.context }}" }],
+            prompt: [{ text: "Repair ${{ miko.context }}" }],
           },
         ],
       },

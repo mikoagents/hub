@@ -805,7 +805,7 @@ async function resolveResource(
 }
 
 function triggerFilterPath(trigger: CompiledTrigger, field: string): readonly (string | number)[] {
-  return [trigger.sourceFile ?? ".paseo/workflows", "filters", field];
+  return [trigger.sourceFile ?? ".miko/workflows", "filters", field];
 }
 
 function resourceField(provider: ConnectionProvider): "repo" | "workspace" | "guild" | "project" {

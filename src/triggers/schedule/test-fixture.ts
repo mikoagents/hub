@@ -9,5 +9,5 @@ on:
 run:
   target: { daemon: devbox, cwd: /workspace }
   agent: { provider: codex, mode: full-access, thinkingOptionId: low }
-  prompt: 'Scan at \${{ paseo.context }}'
+  prompt: 'Scan at \${{ miko.context }}'
 `;

@@ -1,5 +1,5 @@
-export const HUB_RESOURCE_PATH = ".paseo/hub.yml";
-export const WORKFLOW_DIRECTORY = ".paseo/workflows";
+export const HUB_RESOURCE_PATH = ".miko/hub.yml";
+export const WORKFLOW_DIRECTORY = ".miko/workflows";
 export const WORKFLOW_PARTIAL_DIRECTORY = `${WORKFLOW_DIRECTORY}/partials`;
 
 export interface HubBundleFile {

@@ -2093,7 +2093,7 @@ async function buildCreateAgentOptions(
 }
 
 /**
- * Paseo shows the agent title beside the workspace title, so the agent title is static and the
+ * Miko shows the agent title beside the workspace title, so the agent title is static and the
  * workspace carries the identity: an authored `run.title` when present, otherwise the trigger
  * name (which already carries the platform or the bot's job) and the execution prefix that tells
  * runs of one trigger apart. A continuation session keeps the titles from the execution that
@@ -2118,9 +2118,9 @@ function buildAgentEnv(
 ): Record<string, string> {
   return {
     ...materializedEnv,
-    PASEO_AGENT_PROVIDER: intent.agent.provider,
-    ...(intent.agent.mode === undefined ? {} : { PASEO_AGENT_MODE: intent.agent.mode }),
-    PASEO_HUB_CONFIG_JSON: JSON.stringify(intent.hubConfig),
+    MIKO_AGENT_PROVIDER: intent.agent.provider,
+    ...(intent.agent.mode === undefined ? {} : { MIKO_AGENT_MODE: intent.agent.mode }),
+    MIKO_HUB_CONFIG_JSON: JSON.stringify(intent.hubConfig),
   };
 }
 

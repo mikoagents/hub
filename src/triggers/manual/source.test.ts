@@ -17,7 +17,7 @@ describe("manual trigger source", () => {
         payload: {
           guildId: "guild-1",
           channelId: "channel-1",
-          message: "@paseo ping",
+          message: "@miko ping",
         },
       }),
       { status: 200, body: { status: "accepted", deliveryId: "manual-discord-1" } },
@@ -31,7 +31,7 @@ describe("manual trigger source", () => {
         payload: {
           guildId: "guild-1",
           channelId: "channel-1",
-          message: "@paseo ping",
+          message: "@miko ping",
         },
       },
     ]);

@@ -5,7 +5,8 @@ import { cn } from "../../lib/utils.js";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible.js";
 
 /**
- * A bordered card whose header is the whole open/close target. Independent by construction —
+ * A bordered card whose header is the whole open/close target, or — inside a surface that
+ * already has one — the same toggle without the box. Independent by construction —
  * each one owns its own `open`, so several can stand side by side without an accordion's
  * single-open rule closing the section someone is still typing into.
  *
@@ -20,7 +21,6 @@ export function Disclosure({
   media,
   title,
   description,
-  detail,
   status,
   variant = "section",
   children,
@@ -31,13 +31,15 @@ export function Disclosure({
   /** The brand mark. Decorative — the title carries the name. */
   media?: ReactNode;
   title: string;
-  description?: string;
-  /** Extra facts visible while a summary row is collapsed. */
-  detail?: string;
+  /** A sentence; an inline toggle's preview may also be a line of code. */
+  description?: ReactNode;
   /** The single status indicator; file headers keep it beside the name. */
   status?: ReactNode;
-  /** File headers identify source; summary rows fit inside a parent card. */
-  variant?: "section" | "file" | "row";
+  /**
+   * File headers identify source. Inline toggles sit inside a record that already has a surface,
+   * so they draw no box of their own: a chevron, the name, and a one-line preview of the body.
+   */
+  variant?: "section" | "file" | "inline";
   children: ReactNode;
 }) {
   const headerId = `${id}-header`;
@@ -52,37 +54,41 @@ export function Disclosure({
     <Collapsible
       open={open}
       onOpenChange={onOpenChange}
-      className={variant === "row" ? "min-w-0" : "min-w-0 rounded-xl border bg-card"}
+      className={variant === "inline" ? "min-w-0" : "min-w-0 rounded-xl border bg-card"}
       data-provider={id}
     >
       <CollapsibleTrigger
         id={headerId}
         aria-controls={bodyId}
         className={cn(
-          "w-full items-center text-left hover:bg-accent",
-          variant === "row" ? "flex gap-3 rounded-md py-3" : "rounded-xl px-4 py-3",
-          variant === "file" || variant === "row"
-            ? "flex gap-3"
-            : cn("grid gap-x-3 gap-y-1 sm:flex sm:gap-3", compact.columns),
+          "w-full items-center text-left",
+          // Without a box there is no fill to promote on hover, so the quiet parts of the line
+          // promote their colour instead.
+          variant === "inline"
+            ? "group/inline flex gap-2 rounded-sm"
+            : "rounded-xl px-4 py-3 hover:bg-accent",
+          variant === "file" ? "flex gap-3" : null,
+          variant === "section"
+            ? cn("grid gap-x-3 gap-y-1 sm:flex sm:gap-3", compact.columns)
+            : null,
         )}
       >
-        {variant === "row" ? (
+        {variant === "inline" ? (
           <>
-            <span className="grid min-w-0 flex-1 gap-0.5 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-center sm:gap-4">
-              <span className="text-xs text-muted-foreground">{title}</span>
-              <span className="grid min-w-0 gap-1">
-                {/* A summary of several subscriptions is one line each. Pre-line keeps those
-                    breaks; a single-line summary is unchanged. */}
-                <span className="text-sm break-words whitespace-pre-line">{description}</span>
-                {detail === undefined ? null : (
-                  <span className="text-xs break-words text-muted-foreground">{detail}</span>
-                )}
-              </span>
-            </span>
-            <ChevronDown
+            <ChevronRight
               aria-hidden="true"
-              className={cn("size-4 shrink-0 text-muted-foreground", open && "rotate-180")}
+              className={cn(
+                "size-4 shrink-0 text-muted-foreground transition-colors group-hover/inline:text-foreground",
+                open && "rotate-90",
+              )}
             />
+            <span className="shrink-0 text-sm">{title}</span>
+            {/* The preview stands in for a closed body; an open one says it in full below. */}
+            {description === undefined || open ? null : (
+              <span className="min-w-0 truncate text-sm text-muted-foreground transition-colors group-hover/inline:text-foreground">
+                {description}
+              </span>
+            )}
           </>
         ) : null}
         {variant === "file" ? (
@@ -155,7 +161,7 @@ export function Disclosure({
         aria-labelledby={headerId}
         className={cn(
           "min-w-0 overflow-hidden data-[state=closed]:hidden",
-          variant === "row" ? "pt-2 pb-4" : "border-t px-4 py-4",
+          variant === "inline" ? "pt-2" : "border-t px-4 py-4",
         )}
       >
         {children}

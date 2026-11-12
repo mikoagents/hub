@@ -38,7 +38,7 @@ export function SiteHeader({ scope, project }: { scope: string; project?: string
 /**
  * One crumb, including the rule that leads into it. The separator belongs to the crumb after it
  * rather than sitting between two of them, which is what keeps a hidden crumb from leaving its
- * rule behind: on a phone the trail is one crumb, not "Paseo Hub / / API keys".
+ * rule behind: on a phone the trail is one crumb, not "Miko Hub / / API keys".
  *
  * `context` is a crumb that only says where the last one sits, so it is the muted one and it is
  * the one a phone drops.

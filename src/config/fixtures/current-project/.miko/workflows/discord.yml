@@ -15,7 +15,7 @@ steps:
     agent: claude
     prompt:
       - include: partials/classify.md
-      - text: ${{ paseo.prompt }}
+      - text: ${{ miko.prompt }}
     output:
       schema:
         type: object
@@ -30,6 +30,6 @@ steps:
     idle_timeout: 10m
     agent: ${{ values.selected_agent }}
     prompt:
-      - text: ${{ paseo.prompt }}
+      - text: ${{ miko.prompt }}
     allow_outputs:
       - { type: discord.reply, max: 1, required: true }

@@ -157,7 +157,7 @@ export function DaemonsPanel({
     value: filter,
     setValue: setFilter,
     ready,
-  } = usePersistedChoice(`paseo-hub-daemon-status:${organizationId}`, DAEMON_STATUS_FILTERS, "all");
+  } = usePersistedChoice(`miko-hub-daemon-status:${organizationId}`, DAEMON_STATUS_FILTERS, "all");
   if (snapshot.status === "pending" || !ready) {
     return (
       <>

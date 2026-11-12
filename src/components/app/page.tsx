@@ -15,7 +15,12 @@ import { StatusPill, type StatusTone } from "./status-pill.js";
  */
 export function Page({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={cn("mx-auto grid w-full max-w-5xl gap-6 [&>*]:min-w-0", className)}>
+    <div
+      className={cn(
+        "@container/page mx-auto grid w-full max-w-[100rem] gap-6 [&>*]:min-w-0",
+        className,
+      )}
+    >
       {children}
     </div>
   );
@@ -68,7 +73,7 @@ export function PageHeader({
           {status === undefined ? null : <StatusPill tone={status.tone}>{status.label}</StatusPill>}
         </span>
         {description === undefined ? null : (
-          <p className="text-sm text-balance text-muted-foreground">{description}</p>
+          <p className="max-w-prose text-sm text-balance text-muted-foreground">{description}</p>
         )}
       </div>
       {children === undefined ? null : (
@@ -91,7 +96,7 @@ export function PageHeaderSkeleton({ description }: { description?: string }) {
       {description === undefined ? (
         <Skeleton className="h-5 w-80 max-w-full" />
       ) : (
-        <p className="text-sm text-balance text-muted-foreground">{description}</p>
+        <p className="max-w-prose text-sm text-balance text-muted-foreground">{description}</p>
       )}
     </header>
   );

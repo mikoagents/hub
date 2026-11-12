@@ -23,9 +23,9 @@ const registrationModeSchema = z.enum(REGISTRATION_MODES);
 const organizationCreationSchema = z.enum(ORGANIZATION_CREATION_MODES);
 const bootstrapPasswordSchema = z
   .string()
-  .min(PASSWORD_MIN_LENGTH, "PASEO_BOOTSTRAP_OWNER_PASSWORD must be at least 12 characters")
-  .max(128, "PASEO_BOOTSTRAP_OWNER_PASSWORD must not exceed 128 characters")
-  .refine((value) => value.trim().length > 0, "PASEO_BOOTSTRAP_OWNER_PASSWORD must not be blank")
+  .min(PASSWORD_MIN_LENGTH, "MIKO_BOOTSTRAP_OWNER_PASSWORD must be at least 12 characters")
+  .max(128, "MIKO_BOOTSTRAP_OWNER_PASSWORD must not exceed 128 characters")
+  .refine((value) => value.trim().length > 0, "MIKO_BOOTSTRAP_OWNER_PASSWORD must not be blank")
   .refine(
     (value) =>
       (() => {
@@ -35,7 +35,7 @@ const bootstrapPasswordSchema = z
         }
         return true;
       })(),
-    "PASEO_BOOTSTRAP_OWNER_PASSWORD must not contain control characters",
+    "MIKO_BOOTSTRAP_OWNER_PASSWORD must not contain control characters",
   );
 
 export function defaultInstanceAuthPolicy(): InstanceAuthPolicy {
@@ -50,22 +50,22 @@ export function readInstanceAuthPolicy(
   environment: Record<string, string | undefined>,
 ): InstanceAuthPolicy {
   const registrationMode = parsePolicyValue(
-    "PASEO_REGISTRATION_MODE",
-    environment["PASEO_REGISTRATION_MODE"],
+    "MIKO_REGISTRATION_MODE",
+    environment["MIKO_REGISTRATION_MODE"],
     registrationModeSchema,
     REGISTRATION_MODES,
     "invite_only",
   );
   const organizationCreation = parsePolicyValue(
-    "PASEO_ORGANIZATION_CREATION",
-    environment["PASEO_ORGANIZATION_CREATION"],
+    "MIKO_ORGANIZATION_CREATION",
+    environment["MIKO_ORGANIZATION_CREATION"],
     organizationCreationSchema,
     ORGANIZATION_CREATION_MODES,
     "disabled",
   );
-  const organizationName = environment["PASEO_BOOTSTRAP_ORGANIZATION"]?.trim() ?? "";
-  const ownerEmail = environment["PASEO_BOOTSTRAP_OWNER_EMAIL"]?.trim() ?? "";
-  const ownerPassword = environment["PASEO_BOOTSTRAP_OWNER_PASSWORD"] ?? "";
+  const organizationName = environment["MIKO_BOOTSTRAP_ORGANIZATION"]?.trim() ?? "";
+  const ownerEmail = environment["MIKO_BOOTSTRAP_OWNER_EMAIL"]?.trim() ?? "";
+  const ownerPassword = environment["MIKO_BOOTSTRAP_OWNER_PASSWORD"] ?? "";
   const suppliedBootstrapFields = [organizationName, ownerEmail, ownerPassword].filter(
     (value) => value.length > 0,
   ).length;
@@ -87,14 +87,14 @@ export function readInstanceAuthPolicy(
   }
   if (suppliedBootstrapFields !== 3) {
     throw new Error(
-      "PASEO_BOOTSTRAP_ORGANIZATION, PASEO_BOOTSTRAP_OWNER_EMAIL, and PASEO_BOOTSTRAP_OWNER_PASSWORD must be supplied together",
+      "MIKO_BOOTSTRAP_ORGANIZATION, MIKO_BOOTSTRAP_OWNER_EMAIL, and MIKO_BOOTSTRAP_OWNER_PASSWORD must be supplied together",
     );
   }
 
   validateBootstrapIdentity(organizationName, ownerEmail);
   bootstrapPasswordSchema.parse(ownerPassword);
   if (normalizeEmail(ownerPassword) === normalizeEmail(ownerEmail)) {
-    throw new Error("PASEO_BOOTSTRAP_OWNER_PASSWORD must not equal the owner email");
+    throw new Error("MIKO_BOOTSTRAP_OWNER_PASSWORD must not equal the owner email");
   }
 
   return {
@@ -110,9 +110,9 @@ export function readInstanceAuthPolicy(
 
 function validateBootstrapIdentity(organizationName: string, ownerEmail: string): void {
   const parsedEmail = z.string().email().safeParse(ownerEmail);
-  if (!parsedEmail.success) throw new Error("PASEO_BOOTSTRAP_OWNER_EMAIL must be a valid email");
+  if (!parsedEmail.success) throw new Error("MIKO_BOOTSTRAP_OWNER_EMAIL must be a valid email");
   if (organizationName.length > 100) {
-    throw new Error("PASEO_BOOTSTRAP_ORGANIZATION must not exceed 100 characters");
+    throw new Error("MIKO_BOOTSTRAP_ORGANIZATION must not exceed 100 characters");
   }
 }
 

@@ -30,7 +30,7 @@ test("app setup hands off to a daemon, and the daemon that connects opens the da
     const terminal = await page.context().newPage();
     try {
       await terminal.goto(`${origin}/cli-login`);
-      await expect(terminal.getByRole("heading", { name: "Log in the Paseo CLI" })).toBeVisible();
+      await expect(terminal.getByRole("heading", { name: "Log in the Miko CLI" })).toBeVisible();
       await expect(terminal.getByLabel("Verification code")).toBeVisible();
       await expect(terminal.getByRole("heading", { name: "Set up your apps" })).toHaveCount(0);
     } finally {

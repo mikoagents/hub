@@ -177,7 +177,7 @@ describe("organization trigger store", () => {
           .replace(
             "agent: { provider: codex, mode: full-access }",
             `agent:
-    select: \${{ paseo.inputs.runtime }}
+    select: \${{ miko.inputs.runtime }}
     choices:
       fast: { provider: codex, mode: full-access }
       slow: { provider: opencode, mode: default }`,

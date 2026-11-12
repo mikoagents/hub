@@ -184,7 +184,7 @@ async function execute(
       401,
       "unauthorized",
       "Authentication required",
-      "Provide an active Paseo organization credential in the Authorization: Bearer header.",
+      "Provide an active Miko organization credential in the Authorization: Bearer header.",
     );
   }
   if (authorization.status === "forbidden") {

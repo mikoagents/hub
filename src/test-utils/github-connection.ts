@@ -25,7 +25,7 @@ export class GitHubProviderPort implements GitHubAuth {
   options() {
     return {
       publicBaseUrl: "https://hub.example.test",
-      appSlug: "paseo",
+      appSlug: "miko",
       clientId: "client",
       clientSecret: "secret",
       appAuth: this,

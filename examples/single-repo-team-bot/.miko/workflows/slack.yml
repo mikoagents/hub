@@ -15,7 +15,7 @@ steps:
       - include: partials/classifier.md
       - text: |
           <user-prompt>
-          ${{ paseo.prompt }}
+          ${{ miko.prompt }}
           </user-prompt>
     output:
       schema:
@@ -53,11 +53,11 @@ steps:
           </classification>
 
           <context>
-          ${{ paseo.context }}
+          ${{ miko.context }}
           </context>
 
           <user-prompt>
-          ${{ paseo.prompt }}
+          ${{ miko.prompt }}
           </user-prompt>
     allow_outputs:
       - { type: slack.reply, max: 5 }

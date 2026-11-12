@@ -54,6 +54,6 @@ it("keeps other entitlement denials on the existing error path", async () => {
     await agentFailureNotice(reason, "org-1", async () => {
       throw new Error("should not need a billing URL");
     }),
-    `Paseo agent failed: ${reason}`,
+    `Miko agent failed: ${reason}`,
   );
 });

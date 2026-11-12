@@ -53,7 +53,7 @@ test("the whole app setup journey completes at phone width", async ({ hub }) => 
     await github.save();
     await github.expectFocusedResult("GitHub accepted this App.");
     await github.expectStatus("Verified");
-    await github.expectSummary({ App: "Paseo Hub", Owner: "acme-inc", Installations: "None yet" });
+    await github.expectSummary({ App: "Miko Hub", Owner: "acme-inc", Installations: "None yet" });
     await github.expectSetupStepsRetired();
     await surface.expectNothingClipped();
     await surface.shoot(SHOTS, "apps-03-github-verified.mobile");
@@ -92,7 +92,7 @@ test("the whole app setup journey completes at phone width", async ({ hub }) => 
     await surface.shoot(SHOTS, "apps-10-discord-verified.mobile");
     await surface.discord.action("Add to a Discord server").click();
     await surface.discord.expectStatus("Connected");
-    await surface.discord.expectSummary({ Application: "Paseo", Servers: "Acme Guild" });
+    await surface.discord.expectSummary({ Application: "Miko", Servers: "Acme Guild" });
     await surface.expectNothingClipped();
     await surface.shoot(SHOTS, "apps-11-discord-connected.mobile");
 
@@ -101,7 +101,7 @@ test("the whole app setup journey completes at phone width", async ({ hub }) => 
     await surface.linear.expectStackedLayout();
     await surface.linear.fillWorkingCredentials();
     await surface.linear.save();
-    await expect(page.getByRole("heading", { name: "Install Paseo in Acme" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Install Miko in Acme" })).toBeVisible();
     await page.getByRole("link", { name: "Accept installation" }).click();
     await surface.linear.expectStatus("Connected");
     await surface.linear.expectSummary({ Application: "Linear app", Workspaces: "Acme" });

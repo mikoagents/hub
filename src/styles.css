@@ -5,7 +5,7 @@
  * implementation, and `src/typography-policy.test.ts` enforces the parts a regex can see.
  *
  * Both ramps are Linear's measured palette: four neutral surfaces above the page, four text
- * steps, two border steps. Nothing here is a hue except `--link` and `--ring`, which stay Paseo
+ * steps, two border steps. Nothing here is a hue except `--link` and `--ring`, which stay Miko
  * green so the product still signs its name somewhere. `--primary` is the one place that hue is
  * a surface rather than text: a dark teal fill under a pale mint label, dark enough that the
  * label clears AA at every size the filled button is drawn.

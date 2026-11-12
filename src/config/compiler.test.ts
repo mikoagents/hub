@@ -93,10 +93,10 @@ describe("workflow compiler", () => {
   });
 
   it.each([
-    "paseo.event.github.delivery_id",
-    "paseo.prompt",
-    "paseo.context",
-    "paseo.inputs.repo",
+    "miko.event.github.delivery_id",
+    "miko.prompt",
+    "miko.context",
+    "miko.inputs.repo",
     "values.branch",
     "steps.prepare.outputs.branch",
   ])("rejects unsupported newBranch expression %s with field provenance", (expression) => {
@@ -124,7 +124,7 @@ describe("workflow compiler", () => {
         ]);
         assert.match(
           error.message,
-          /unsupported path|execution templates support only paseo\.execution\.id paths/iu,
+          /unsupported path|execution templates support only miko\.execution\.id paths/iu,
         );
         return true;
       },
@@ -140,7 +140,7 @@ describe("workflow compiler", () => {
             ...environment,
             worktree: {
               mode: "branch-off",
-              newBranch: "trigger-${{ paseo.execution.id }}",
+              newBranch: "trigger-${{ miko.execution.id }}",
             },
           },
         ],
@@ -150,13 +150,13 @@ describe("workflow compiler", () => {
 
   it("accepts the execution id in a step title and stores the template", () => {
     const authored = configuration();
-    Reflect.set(authored.triggers[0]!.steps[0]!, "title", "Intake · ${{ paseo.execution.id }}");
+    Reflect.set(authored.triggers[0]!.steps[0]!, "title", "Intake · ${{ miko.execution.id }}");
     const compiled = compileHubConfig(authored);
-    assert.equal(compiled.triggers[0]?.steps[0]?.title, "Intake · ${{ paseo.execution.id }}");
+    assert.equal(compiled.triggers[0]?.steps[0]?.title, "Intake · ${{ miko.execution.id }}");
     assert.deepEqual(parseCompiledHubConfig(compiled), compiled);
   });
 
-  it.each(["paseo.prompt", "paseo.context", "paseo.inputs.repo", "values.branch"])(
+  it.each(["miko.prompt", "miko.context", "miko.inputs.repo", "values.branch"])(
     "rejects %s in a step title with field provenance",
     (expression) => {
       const authored = configuration();
@@ -172,7 +172,7 @@ describe("workflow compiler", () => {
             "work",
             "title",
           ]);
-          assert.match(error.message, /supports only paseo\.execution\.id/u);
+          assert.match(error.message, /supports only miko\.execution\.id/u);
           return true;
         },
       );
@@ -237,12 +237,12 @@ describe("workflow compiler", () => {
         {
           ...configuration().triggers[0],
           inputs: { repo: { type: "string", choices: ["paseo", "hub"] } },
-          values: { selected: "${{ paseo.inputs.repo ?? steps.classify.outputs.repo }}" },
+          values: { selected: "${{ miko.inputs.repo ?? steps.classify.outputs.repo }}" },
           steps: [
             {
               ...configuration().triggers[0]!.steps[0],
               id: "classify",
-              if: "${{ paseo.inputs.repo == null }}",
+              if: "${{ miko.inputs.repo == null }}",
               output: {
                 schema: { type: "object", properties: { repo: { enum: ["paseo", "hub"] } } },
               },
@@ -251,7 +251,7 @@ describe("workflow compiler", () => {
               ...configuration().triggers[0]!.steps[0],
               id: "work",
               if: "${{ values.selected == 'hub' }}",
-              prompt: [{ text: "${{ paseo.prompt }} / ${{ values.selected }}" }],
+              prompt: [{ text: "${{ miko.prompt }} / ${{ values.selected }}" }],
             },
           ],
         },
@@ -311,7 +311,7 @@ describe("workflow compiler", () => {
     const raw = configuration();
     const step = raw.triggers[0]!.steps[0]!;
     Reflect.set(step, "env", {
-      SOME_TOKEN: "prefix-${{ paseo.connections.some-connection.token }}",
+      SOME_TOKEN: "prefix-${{ miko.connections.some-connection.token }}",
     });
     Reflect.set(step, "github", {
       connection: "getpaseo-github",
@@ -320,7 +320,7 @@ describe("workflow compiler", () => {
 
     const compiled = compileHubConfig(raw);
     assert.deepEqual(compiled.triggers[0]?.steps[0]?.env, {
-      SOME_TOKEN: "prefix-${{ paseo.connections.some-connection.token }}",
+      SOME_TOKEN: "prefix-${{ miko.connections.some-connection.token }}",
     });
     assert.deepEqual(compiled.triggers[0]?.steps[0]?.github, {
       connection: "getpaseo-github",
@@ -610,7 +610,7 @@ describe("workflow compiler", () => {
           triggers: [
             {
               ...trigger,
-              steps: [{ ...trigger.steps[0]!, agent: { provider: "${{ paseo.prompt }}" } }],
+              steps: [{ ...trigger.steps[0]!, agent: { provider: "${{ miko.prompt }}" } }],
             },
           ],
         }),
@@ -624,9 +624,7 @@ describe("workflow compiler", () => {
             {
               ...trigger,
               inputs: { provider: { type: "string" } },
-              steps: [
-                { ...trigger.steps[0]!, agent: { provider: "${{ paseo.inputs.provider }}" } },
-              ],
+              steps: [{ ...trigger.steps[0]!, agent: { provider: "${{ miko.inputs.provider }}" } }],
             },
           ],
         }),
@@ -642,7 +640,7 @@ describe("workflow compiler", () => {
         triggers: [
           {
             ...trigger,
-            steps: [{ ...trigger.steps[0]!, prompt: [{ text: "${{ paseo.context }}" }] }],
+            steps: [{ ...trigger.steps[0]!, prompt: [{ text: "${{ miko.context }}" }] }],
           },
         ],
       }),
@@ -654,11 +652,11 @@ describe("workflow compiler", () => {
           triggers: [
             {
               ...trigger,
-              steps: [{ ...trigger.steps[0]!, if: "${{ paseo.context }}" }],
+              steps: [{ ...trigger.steps[0]!, if: "${{ miko.context }}" }],
             },
           ],
         }),
-      /paseo\.context outside a step prompt/iu,
+      /miko\.context outside a step prompt/iu,
     );
     assert.throws(
       () =>
@@ -670,7 +668,7 @@ describe("workflow compiler", () => {
               steps: [
                 {
                   ...trigger.steps[0]!,
-                  agent: { provider: "${{ paseo.context }}" },
+                  agent: { provider: "${{ miko.context }}" },
                 },
               ],
             },
@@ -837,7 +835,7 @@ describe("workflow compiler", () => {
       () =>
         compileHubConfig({
           ...configuration(),
-          environments: [{ name: "docker", kind: "docker", image: "paseo/test" }],
+          environments: [{ name: "docker", kind: "docker", image: "miko/test" }],
           triggers: [
             {
               ...trigger,
@@ -851,7 +849,7 @@ describe("workflow compiler", () => {
       () =>
         compileHubConfig({
           ...configuration(),
-          environments: [{ name: "fly", kind: "fly", image: "paseo/test" }],
+          environments: [{ name: "fly", kind: "fly", image: "miko/test" }],
           triggers: [
             {
               ...trigger,
@@ -865,7 +863,7 @@ describe("workflow compiler", () => {
       () =>
         compileHubConfig({
           ...configuration(),
-          environments: [environment, { name: "docker", kind: "docker", image: "paseo/test" }],
+          environments: [environment, { name: "docker", kind: "docker", image: "miko/test" }],
           triggers: [
             {
               ...trigger,
@@ -873,7 +871,7 @@ describe("workflow compiler", () => {
               steps: [
                 {
                   ...trigger.steps[0]!,
-                  environment: "${{ paseo.inputs.runner }}",
+                  environment: "${{ miko.inputs.runner }}",
                 },
               ],
             },

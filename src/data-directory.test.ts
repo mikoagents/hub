@@ -12,7 +12,7 @@ describe("Hub data directory", () => {
         homeDirectory: resolve("fixtures", "home"),
         workingDirectory: resolve("fixtures", "work"),
       }),
-      join(dataHome, "paseo-hub"),
+      join(dataHome, "miko-hub"),
     );
   });
 
@@ -25,18 +25,18 @@ describe("Hub data directory", () => {
           homeDirectory,
           workingDirectory: resolve("fixtures", "work"),
         }),
-        join(homeDirectory, ".local", "share", "paseo-hub"),
+        join(homeDirectory, ".local", "share", "miko-hub"),
       );
     }
   });
 
-  it("keeps every defined PASEO_HUB_DATA_DIR as an explicit override", () => {
+  it("keeps every defined MIKO_HUB_DATA_DIR as an explicit override", () => {
     const explicitDirectory = resolve("fixtures", "explicit-data");
     const workingDirectory = resolve("fixtures", "work");
     assert.equal(
       resolveHubDataDirectory({
         environment: {
-          PASEO_HUB_DATA_DIR: explicitDirectory,
+          MIKO_HUB_DATA_DIR: explicitDirectory,
           XDG_DATA_HOME: resolve("fixtures", "xdg-data"),
         },
         homeDirectory: resolve("fixtures", "home"),
@@ -47,18 +47,18 @@ describe("Hub data directory", () => {
     assert.equal(
       resolveHubDataDirectory({
         environment: {
-          PASEO_HUB_DATA_DIR: "var/paseo-hub",
+          MIKO_HUB_DATA_DIR: "var/miko-hub",
           XDG_DATA_HOME: resolve("fixtures", "xdg-data"),
         },
         homeDirectory: resolve("fixtures", "home"),
         workingDirectory,
       }),
-      join(workingDirectory, "var", "paseo-hub"),
+      join(workingDirectory, "var", "miko-hub"),
     );
     assert.equal(
       resolveHubDataDirectory({
         environment: {
-          PASEO_HUB_DATA_DIR: "",
+          MIKO_HUB_DATA_DIR: "",
           XDG_DATA_HOME: resolve("fixtures", "xdg-data"),
         },
         homeDirectory: resolve("fixtures", "home"),

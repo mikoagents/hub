@@ -2,9 +2,13 @@ import assert from "node:assert/strict";
 import { describe, it } from "vitest";
 import {
   agentModelSummary,
+  codeLine,
+  eventRecords,
+  fixedValues,
+  githubAccess,
   hasManualEntry,
+  oneOf,
   orderSourceFiles,
-  eventConfigurationOverview,
   subscriptionListSummary,
   subscriptionSummary,
   triggerTargetSummary,
@@ -73,6 +77,17 @@ describe("Trigger presentation", () => {
       "codex/gpt-6.1-sol · claude/opus · Computed at runtime · Defined in code",
     );
     assert.equal(agentModelSummary({ ...inspection, agents: [] }), "Code workflow");
+    const chosen = inspectTriggerSources([
+      {
+        path: "trigger.ts",
+        content: `export default {run(ctx) {
+        const fast = ctx.event.source === "manual";
+        ctx.agent.run("models", {agent:{provider:"codex",model:fast ? "small" : "large"}});
+        ctx.agent.run("pairs", {agent:fast ? {provider:"codex",model:"a"} : {provider:"claude",model:"b"}});
+      }};`,
+      },
+    ]);
+    assert.equal(agentModelSummary(chosen), "codex/small · codex/large · Computed at runtime");
   });
 
   it("keeps daemon and directory pairs together and identifies runner-only code", () => {
@@ -116,23 +131,16 @@ describe("Trigger presentation", () => {
     assert.equal(hasManualEntry({ ...manifest, on: [{ source: "github", event: "*" }] }), false);
   });
 
-  it("keeps each subscription's repository on that subscription", () => {
+  it("lists events once per scope and never moves a repository onto another subscription", () => {
+    const daily = {
+      start: "1970-01-01T00:00:00",
+      timezone: "Asia/Shanghai",
+      rule: "FREQ=DAILY;BYHOUR=9;BYMINUTE=0;BYSECOND=0",
+    };
     assert.deepEqual(
-      eventConfigurationOverview([
-        { source: "github", event: "pull_request.opened", connection: "acme-inc" },
-      ]),
-      {
-        summary: "GitHub · Pull request opened",
-        detail: "Connection: acme-inc",
-      },
-    );
-    assert.deepEqual(
-      eventConfigurationOverview([
-        {
-          source: "github",
-          event: "pull_request.opened",
-          connection: "vioraos-github",
-        },
+      eventRecords([
+        { source: "manual", event: "run" },
+        { source: "github", event: "pull_request.opened", connection: "vioraos-github" },
         {
           source: "github",
           event: ["pull_request.ready_for_review", "pull_request.synchronize"],
@@ -141,43 +149,130 @@ describe("Trigger presentation", () => {
         },
         {
           source: "github",
-          event: ["check_suite.completed", "workflow_run.completed"],
+          event: ["check_suite.completed", "pull_request.opened"],
           connection: "vioraos-github",
         },
-      ]),
-      {
-        summary: [
-          "Pull request opened",
-          "Pull request ready for review, Pull request synchronize · Repository: VioraOS/Viora-Mono",
-          "Check suite completed, Workflow run completed",
-        ].join("\n"),
-        detail: "Connection: vioraos-github",
-      },
-    );
-    assert.deepEqual(
-      eventConfigurationOverview([
-        {
-          source: "github",
-          event: "pull_request.opened",
-          connection: "acme",
-          resource: "acme/app",
-        },
         { source: "slack", event: "mention", connection: "acme-slack" },
-      ]),
-      {
-        summary: [
-          "GitHub · Pull request opened · acme · Repository: acme/app",
-          "Slack · Mention · acme-slack",
-        ].join("\n"),
-      },
+        { source: "schedule", event: "tick", recurrence: daily },
+        { source: "inventory", event: "stock.*" },
+      ]).map(({ source, primary, secondary }) => [source, primary, secondary]),
+      [
+        ["manual", "On demand", "When you choose Run now"],
+        ["github", "Pull request opened · Check suite completed", "GitHub · via vioraos-github"],
+        [
+          "github",
+          "Pull request ready for review · Pull request synchronize",
+          "GitHub · VioraOS/Viora-Mono · via vioraos-github",
+        ],
+        ["slack", "Mention", "Slack · via acme-slack"],
+        ["schedule", "Every day at 09:00 (Asia/Shanghai)", "Schedule"],
+        ["inventory", "Stock events", "inventory"],
+      ],
     );
+  });
+
+  it("groups GitHub grants by connection in name order and says each shared permission once", () => {
+    const read = { contents: "read", pull_requests: "read" } as const;
+    const write = { contents: "write", pull_requests: "write" } as const;
     assert.deepEqual(
-      eventConfigurationOverview([
-        { source: "github", event: "push", resource: "same" },
-        { source: "slack", event: "mention", resource: "same" },
-      ]).summary,
-      ["GitHub · Push · Repository: same", "Slack · Mention · Resource: same"].join("\n"),
+      githubAccess({
+        "repository-10": {
+          connection: "vioraos-github",
+          repositories: ["VioraOS/Viora-Marketing"],
+          permissions: write,
+        },
+        "repository-2": {
+          connection: "vioraos-github",
+          repositories: ["VioraOS/Viora-Mono"],
+          permissions: write,
+        },
+        other: { connection: "acme-github", repositories: ["acme/app"], permissions: read },
+      }),
+      [
+        {
+          connection: "acme-github",
+          grants: [{ alias: "other", repositories: ["acme/app"] }],
+          permissions: [
+            { label: "Contents", shared: "Read", levels: [{ alias: "other", level: "Read" }] },
+            {
+              label: "Pull requests",
+              shared: "Read",
+              levels: [{ alias: "other", level: "Read" }],
+            },
+          ],
+        },
+        {
+          connection: "vioraos-github",
+          grants: [
+            { alias: "repository-2", repositories: ["VioraOS/Viora-Mono"] },
+            { alias: "repository-10", repositories: ["VioraOS/Viora-Marketing"] },
+          ],
+          permissions: [
+            {
+              label: "Contents",
+              shared: "Write",
+              levels: [
+                { alias: "repository-2", level: "Write" },
+                { alias: "repository-10", level: "Write" },
+              ],
+            },
+            {
+              label: "Pull requests",
+              shared: "Write",
+              levels: [
+                { alias: "repository-2", level: "Write" },
+                { alias: "repository-10", level: "Write" },
+              ],
+            },
+          ],
+        },
+      ],
     );
+    const [mixed] = githubAccess({
+      snapshot: { connection: "acme", repositories: [], permissions: { checks: "read" } },
+      review: { connection: "acme", repositories: ["acme/app"], permissions: { issues: "write" } },
+    });
+    assert.deepEqual(
+      mixed?.permissions.map(({ label, shared, levels }) => [label, shared, levels]),
+      [
+        [
+          "Checks",
+          null,
+          [
+            { alias: "review", level: "None" },
+            { alias: "snapshot", level: "Read" },
+          ],
+        ],
+        [
+          "Issues",
+          null,
+          [
+            { alias: "review", level: "Write" },
+            { alias: "snapshot", level: "None" },
+          ],
+        ],
+      ],
+    );
+  });
+
+  it("reads code settings as their fixed values or the alternatives they pick between", () => {
+    const field = { value: null, values: [], expression: null, source: null };
+    assert.deepEqual(fixedValues({ ...field, status: "known", value: "max" }), ["max"]);
+    assert.deepEqual(fixedValues({ ...field, status: "known" }), []);
+    assert.deepEqual(fixedValues({ ...field, status: "unset" }), []);
+    assert.deepEqual(fixedValues({ ...field, status: "runtime", expression: "ctx.model" }), []);
+    assert.deepEqual(fixedValues({ ...field, status: "choice", values: ["recovery", "review"] }), [
+      "recovery",
+      "review",
+    ]);
+    assert.equal(oneOf(["review"]), "review");
+    assert.equal(oneOf(["recovery", "review"]), "recovery or review");
+    assert.equal(oneOf(["a", "b", "c"]), "a, b, or c");
+    assert.equal(
+      codeLine("[\n  runtimePrompt,\n  rendered,\n].join()"),
+      "[ runtimePrompt, rendered, ].join()",
+    );
+    assert.equal(codeLine("x".repeat(200)), "x".repeat(119) + "…");
   });
 
   it("uses readable event and timezone summaries while preserving custom source names", () => {

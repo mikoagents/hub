@@ -1,6 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 import { test } from "./app.js";
-import type { PaseoHub } from "./helpers/hub.js";
+import type { MikoHub } from "./helpers/hub.js";
 
 test("unknown pages, APIs, and browser probes have intentional 404s without router warnings", async ({
   hub,
@@ -14,7 +14,7 @@ test("unknown pages, APIs, and browser probes have intentional 404s without rout
   expect(api.status()).toBe(404);
   await expect(api.json()).resolves.toEqual({
     error: "not_found",
-    message: "This Paseo Hub API endpoint does not exist. Check the request path and API version.",
+    message: "This Miko Hub API endpoint does not exist. Check the request path and API version.",
   });
 
   for (const path of ["/favicon.ico", "/.well-known/appspecific/com.chrome.devtools.json"]) {
@@ -28,7 +28,7 @@ test("unknown pages, APIs, and browser probes have intentional 404s without rout
   );
 });
 
-async function openUnknownPage(hub: PaseoHub, page: Page) {
+async function openUnknownPage(hub: MikoHub, page: Page) {
   const response = await page.goto(`${hub.primaryApplication().origin}/definitely-unknown`);
   expect(response?.status()).toBe(404);
 }

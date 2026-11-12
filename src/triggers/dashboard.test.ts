@@ -266,12 +266,12 @@ describe("trigger dashboard read model", () => {
     });
     const bundle = compileHubBundle([
       {
-        path: ".paseo/hub.yml",
+        path: ".miko/hub.yml",
         content:
           "environments:\n  runner: { kind: daemon, daemon: devbox, cwd: /workspace }\nagents:\n  coder: { provider: codex }\n",
       },
       ...["first", "second"].map((name) => ({
-        path: `.paseo/workflows/${name}.yml`,
+        path: `.miko/workflows/${name}.yml`,
         content: `name: ${name}\non: manual.run\nmax_runtime: 2h\nsteps:\n  - id: work\n    environment: runner\n    max_runtime: 1h\n    idle_timeout: 10m\n    agent: coder\n    prompt: [{ text: Work }]\n`,
       })),
     ]);

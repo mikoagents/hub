@@ -25,13 +25,13 @@ import type {
  * — always a full resync, since the catalog is a handful of products and one code path is easier
  * to keep correct than an incremental one plus a full one.
  *
- * Two products claiming one `paseo_plan_slug` is an ambiguity: both are rejected (slug is catalog
+ * Two products claiming one `miko_plan_slug` is an ambiguity: both are rejected (slug is catalog
  * identity, and picking a winner would be arbitrary). Invalid entitlement metadata rejects only
  * that product. A rejected product keeps its last known good row and is logged loudly — nothing
  * here ever syncs an unvalidated template or an ambiguous slug.
  *
  * After upserting the valid, unambiguous products, every plan absent from the snapshot (a product
- * that lost its `paseo_plan` tag or was deleted) is deactivated, so it stops being selectable
+ * that lost its `miko_plan` tag or was deleted) is deactivated, so it stops being selectable
  * rather than lingering active in the mirror.
  *
  * Each upserted plan also carries its organizations forward onto the new template — see

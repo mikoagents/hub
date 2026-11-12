@@ -840,7 +840,7 @@ describe("database migration application", () => {
       const partialContent = "Triage the request before labeling it.";
       const files = [
         ...configurationBundleFixture(dump(rawConfiguration)),
-        { path: ".paseo/workflows/partials/triage.md", content: partialContent },
+        { path: ".miko/workflows/partials/triage.md", content: partialContent },
       ];
       const githubRevision = await store.insertGitHubBundleRevision({
         files,
@@ -1933,7 +1933,7 @@ class LegacyUpgrade {
     legacyToken: string,
     url: string,
   ) {
-    const apiKey = "paseo_pk_migration_test";
+    const apiKey = "miko_pk_migration_test";
     const apiKeyId = "00000000-0000-4000-8000-0000000000bb";
     const client = await createPostgresQueryRuntime(url);
 
@@ -1941,7 +1941,7 @@ class LegacyUpgrade {
       await client.query(
         `insert into organization_api_keys
            (id, organization_id, name, prefix, verifier, scopes)
-         values ($1, $2, 'Migration test', 'paseo_pk_migration', 'migration-verifier', $3)`,
+         values ($1, $2, 'Migration test', 'miko_pk_migration', 'migration-verifier', $3)`,
         [apiKeyId, organizationId, ["configuration:install", "runs:dispatch", "daemons:enroll"]],
       );
     } finally {
@@ -2017,11 +2017,11 @@ class LegacyUpgrade {
           projectSlug: "default",
           files: [
             {
-              path: ".paseo/hub.yml",
+              path: ".miko/hub.yml",
               content: `environments:\n  production:\n    kind: daemon\n    daemon: daemon-${this.legacyDaemonId.slice(0, 8)}\n    cwd: /repo\nagents: {}`,
             },
             {
-              path: ".paseo/workflows/noop.yml",
+              path: ".miko/workflows/noop.yml",
               content:
                 "name: noop\non: manual.run\nmax_runtime: 1h\nsteps:\n  - id: work\n    environment: production\n    max_runtime: 10m\n    idle_timeout: 1m\n    agent: { provider: test }\n    prompt: [{ text: noop }]",
             },

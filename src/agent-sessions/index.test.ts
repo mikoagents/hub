@@ -301,7 +301,7 @@ test("ordinary launches use agent sessions and preserve long prompts without ena
 
 test("steering keeps the active agent's scoped credentials instead of requiring a new agent", async () => {
   const f = await fixture();
-  const env = { TOKEN: "${{ paseo.connections.support.token }}" };
+  const env = { TOKEN: "${{ miko.connections.support.token }}" };
   const github = {
     connection: "getpaseo-github",
     repositories: ["getpaseo/paseo"],

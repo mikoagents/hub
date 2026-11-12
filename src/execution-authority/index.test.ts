@@ -67,8 +67,8 @@ describe("Hub execution authority", () => {
         },
       });
       const authoredEnv = {
-        SOME_TOKEN: "prefix-${{ paseo.connections.some-connection.token }}",
-        SAME_TOKEN: "${{ paseo.connections.some-connection.token }}",
+        SOME_TOKEN: "prefix-${{ miko.connections.some-connection.token }}",
+        SAME_TOKEN: "${{ miko.connections.some-connection.token }}",
       };
 
       const launch = await authority.materialize({
@@ -86,8 +86,8 @@ describe("Hub execution authority", () => {
       assert.equal(launchEnv["GH_TOKEN"], undefined);
       assert.equal(launchEnv["GIT_CONFIG_COUNT"], undefined);
       assert.deepEqual(authoredEnv, {
-        SOME_TOKEN: "prefix-${{ paseo.connections.some-connection.token }}",
-        SAME_TOKEN: "${{ paseo.connections.some-connection.token }}",
+        SOME_TOKEN: "prefix-${{ miko.connections.some-connection.token }}",
+        SAME_TOKEN: "${{ miko.connections.some-connection.token }}",
       });
       await authority.onExecutionTerminal("execution-discord");
       assert.deepEqual(connectionRevocations, ["some-connection-token"]);
@@ -126,9 +126,9 @@ describe("Hub execution authority", () => {
       GH_TOKEN: "scoped-token-1",
       GIT_CONFIG_COUNT: "5",
       GIT_CONFIG_KEY_0: "user.name",
-      GIT_CONFIG_VALUE_0: "paseo[bot]",
+      GIT_CONFIG_VALUE_0: "miko[bot]",
       GIT_CONFIG_KEY_1: "user.email",
-      GIT_CONFIG_VALUE_1: "9876+paseo[bot]@users.noreply.github.com",
+      GIT_CONFIG_VALUE_1: "9876+miko[bot]@users.noreply.github.com",
       GIT_CONFIG_KEY_2: "url.https://github.com/.insteadOf",
       GIT_CONFIG_VALUE_2: "git@github.com:",
       GIT_CONFIG_KEY_3: "url.https://github.com/.insteadOf",
@@ -271,7 +271,7 @@ describe("Hub execution authority", () => {
             token: "stale-token",
             expiresAt: Date.now() + 60 * 60 * 1000,
             botUserId: 1,
-            botLogin: "paseo[bot]",
+            botLogin: "miko[bot]",
           };
         },
       },
@@ -326,7 +326,7 @@ describe("Hub execution authority", () => {
         executionId: "durable-status-race",
         projectId: "project-1",
         triggerContext: { provider: "manual" },
-        env: { TOKEN: "${{ paseo.connections.some-connection.token }}" },
+        env: { TOKEN: "${{ miko.connections.some-connection.token }}" },
       }),
       /terminal execution/iu,
     );
@@ -371,7 +371,7 @@ describe("Hub execution authority", () => {
       executionId: "terminal-during-final-query",
       projectId: "project-1",
       triggerContext: { provider: "manual" },
-      env: { TOKEN: "${{ paseo.connections.some-connection.token }}" },
+      env: { TOKEN: "${{ miko.connections.some-connection.token }}" },
     });
     await finalQueryObserved;
     const terminal = authority.onExecutionTerminal("terminal-during-final-query");
@@ -394,7 +394,7 @@ describe("Hub execution authority", () => {
             token: "durable-github-token",
             expiresAt: Date.now() + 60 * 60 * 1000,
             botUserId: 1,
-            botLogin: "paseo[bot]",
+            botLogin: "miko[bot]",
           };
         },
         revoke: async (token) => {
@@ -471,7 +471,7 @@ describe("Hub execution authority", () => {
       token: "race-token",
       expiresAt: Date.now() + 60 * 60 * 1000,
       botUserId: 1,
-      botLogin: "paseo[bot]",
+      botLogin: "miko[bot]",
     });
     await assert.rejects(materialization, /terminal execution/iu);
     await terminal;
@@ -489,7 +489,7 @@ describe("Hub execution authority", () => {
           token: "retry-deadline-token",
           expiresAt: clock.now() + 60 * 60 * 1000,
           botUserId: 1,
-          botLogin: "paseo[bot]",
+          botLogin: "miko[bot]",
         }),
         revoke: async (token) => {
           attempts += 1;
@@ -530,7 +530,7 @@ describe("Hub execution authority", () => {
           token: "retry-terminal-token",
           expiresAt: clock.now() + 60 * 60 * 1000,
           botUserId: 1,
-          botLogin: "paseo[bot]",
+          botLogin: "miko[bot]",
         }),
         revoke: async (token) => {
           attempts += 1;
@@ -570,7 +570,7 @@ describe("Hub execution authority", () => {
           token: "upstream-expiry-token",
           expiresAt: clock.now() + 3_000,
           botUserId: 1,
-          botLogin: "paseo[bot]",
+          botLogin: "miko[bot]",
         }),
         revoke: async () => {
           attempts += 1;
@@ -690,7 +690,7 @@ describe("Hub execution authority", () => {
         ...restartInput(),
         executionId: slug,
         github: undefined,
-        env: { TOKEN: "prefix-${{ paseo.connections." + slug + ".token }}" },
+        env: { TOKEN: "prefix-${{ miko.connections." + slug + ".token }}" },
       });
     }
     await first.stop();
@@ -701,7 +701,7 @@ describe("Hub execution authority", () => {
         ...restartInput(),
         executionId: slug,
         github: undefined,
-        env: { TOKEN: "prefix-${{ paseo.connections." + slug + ".token }}" },
+        env: { TOKEN: "prefix-${{ miko.connections." + slug + ".token }}" },
       };
       assert.equal(await replacement.canResume(input), true);
       assert.deepEqual(await replacement.materialize(input), {
@@ -870,7 +870,7 @@ function githubAuthorityFake(now: () => number = Date.now) {
         token: `scoped-token-${count}`,
         expiresAt: now() + 60 * 60 * 1000,
         botUserId: 9876,
-        botLogin: "paseo[bot]",
+        botLogin: "miko[bot]",
       };
     },
     async revoke(token: string) {

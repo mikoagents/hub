@@ -175,7 +175,7 @@ async function activeProject(
     slug,
     createdByUserId: null,
   });
-  const files = [{ path: ".paseo/hub.yml", content: hub }, ...workflows];
+  const files = [{ path: ".miko/hub.yml", content: hub }, ...workflows];
   const bundle = compileHubBundle(files);
   const revision = await database.insertProjectConfigurationRevision({
     projectId: project.id,
@@ -208,7 +208,7 @@ function slackConnection(id: string, teamId: string) {
 function workflow(name: string, event: string, body: string): HubBundleFile {
   const filters = event === "slack.mention" ? "filters: { from_users: [U123] }\n" : "";
   return {
-    path: `.paseo/workflows/${name}.yml`,
+    path: `.miko/workflows/${name}.yml`,
     content: `name: ${name}\non: ${event}\nmax_runtime: 2h\n${filters}${body}`,
   };
 }

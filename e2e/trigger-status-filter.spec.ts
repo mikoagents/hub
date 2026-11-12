@@ -79,7 +79,7 @@ test("handles invalid saved values and keeps filtering when storage is blocked",
   await statusOption(page, "Enabled").click();
   await page.evaluate(() => {
     const key = Object.keys(localStorage).find((value) =>
-      value.startsWith("paseo-hub-trigger-status:"),
+      value.startsWith("miko-hub-trigger-status:"),
     );
     if (key === undefined) throw new Error("Status preference was not saved");
     localStorage.setItem(key, "unknown-status");

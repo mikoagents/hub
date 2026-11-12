@@ -32,7 +32,7 @@ export async function runTriggerCommand(args: string[]): Promise<void> {
       directory,
       name: triggerName,
       entry: join(directory, "trigger.ts"),
-      next: "paseo-hub trigger check <entry>",
+      next: "miko trigger check <entry>",
     });
     return;
   }
@@ -147,7 +147,7 @@ export async function runTriggerCommand(args: string[]): Promise<void> {
     }
     default:
       throw new Error(
-        "Usage: paseo-hub trigger <init|check|build|deploy|list|run|event|runs|logs|cancel|enable|disable|runner-enroll|runner> [entry/name] --url <Hub URL> --token-file <credential file>",
+        "Usage: miko trigger <init|check|build|deploy|list|run|event|runs|logs|cancel|enable|disable|runner-enroll|runner> [entry/name] --url <Hub URL> --token-file <credential file>",
       );
   }
 }

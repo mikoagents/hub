@@ -17,8 +17,7 @@ function apiNotFound(): Response {
   return Response.json(
     {
       error: "not_found",
-      message:
-        "This Paseo Hub API endpoint does not exist. Check the request path and API version.",
+      message: "This Miko Hub API endpoint does not exist. Check the request path and API version.",
     },
     { status: 404 },
   );

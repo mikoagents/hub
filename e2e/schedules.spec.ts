@@ -57,8 +57,7 @@ test("deploys a code schedule, receives a real clock tick, and inspects edited c
         .filter({ hasText: "periodic-scan" }),
     ).toContainText(summary);
     await page.getByRole("link", { name: "periodic-scan", exact: true }).click();
-    await page.getByRole("button", { name: /^The event\b/ }).click();
-    await expect(page.getByRole("region", { name: /^The event\b/ })).toContainText(summary);
+    await expect(page.getByRole("list", { name: "Events", exact: true })).toContainText(summary);
     await page.reload();
     await page.getByRole("button", { name: "trigger.ts", exact: true }).click();
     await expect(

@@ -16,7 +16,7 @@ type Tone = "success" | "warning" | "danger" | "neutral";
  * place to be reviewed.
  *
  * Bold `term` segments are labels the external portal uses verbatim. Do not reword them to match
- * Paseo's vocabulary; the operator is reading them off another company's screen.
+ * Miko Hub's vocabulary; the operator is reading them off another company's screen.
  */
 export type StepSegment =
   | { kind: "text"; value: string }
@@ -434,7 +434,7 @@ export const SLACK_GUIDE: ProviderGuide = {
           manifest: true,
         },
         slackStep(
-          "Under Basic Information → App-Level Tokens, generate a token named Paseo with connections:write.",
+          "Under Basic Information → App-Level Tokens, generate a token named Miko with connections:write.",
         ),
         slackStep("Under OAuth & Permissions, install the app and copy the Bot User OAuth Token."),
       ],
@@ -719,10 +719,10 @@ export function slackManifest(origin: string, transport: "socket" | "webhook" = 
   const requestUrl =
     transport === "webhook" ? `    request_url: ${origin}/api/integrations/slack/events\n` : "";
   return `display_information:
-  name: Paseo
+  name: Miko
 features:
   bot_user:
-    display_name: Paseo
+    display_name: Miko
     always_online: false
 oauth_config:
 ${webhook}  scopes:

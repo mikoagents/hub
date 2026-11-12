@@ -25,12 +25,12 @@ allowlists come from the validated deployment manifest, independently of the age
 
 ## Create and deploy
 
-Use Node.js 22 or newer. The CLI is part of the built `@getpaseo/hub` package:
+Use Node.js 22 or newer. The CLI is part of the built `@mikoagents/hub` package:
 
 ```sh
-paseo-hub trigger init ./my-trigger
-paseo-hub trigger check ./my-trigger/trigger.ts
-paseo-hub trigger deploy ./my-trigger/trigger.ts \
+miko trigger init ./my-trigger
+miko trigger check ./my-trigger/trigger.ts
+miko trigger deploy ./my-trigger/trigger.ts \
   --url http://localhost:3000 --token-file /private/hub-credential
 ```
 
@@ -46,7 +46,7 @@ is running. Deploying code builds and validates the bundle automatically. Use `t
 ./trigger-artifact.json` when CI needs a separate build artifact.
 
 ```ts
-import { defineTrigger } from "@getpaseo/hub/triggers";
+import { defineTrigger } from "@mikoagents/hub/triggers";
 
 export default defineTrigger({
   name: "health-check",
@@ -89,10 +89,10 @@ that an author is trusted.
 ## Start an independent runner
 
 ```sh
-paseo-hub trigger runner-enroll local \
+miko trigger runner-enroll local \
   --url http://localhost:3000 --token-file /private/hub-credential \
   --out /private/runner-credential
-paseo-hub trigger runner \
+miko trigger runner \
   --url http://localhost:3000 --token-file /private/runner-credential \
   --directory /private/trigger-work --concurrency 1
 ```
@@ -183,7 +183,7 @@ same installation-token lifecycle, repository checks and durable operation journ
 `ctx.github.request`. Endpoint result types come from GitHub's Octokit definitions.
 
 ```ts
-import { githubIssueComment, stableJson } from "@getpaseo/hub/triggers";
+import { githubIssueComment, stableJson } from "@mikoagents/hub/triggers";
 
 const source = githubIssueComment(ctx.event);
 if (source === null || source.action !== "created") ctx.skip("Not a new issue comment");

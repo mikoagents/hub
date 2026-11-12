@@ -290,7 +290,7 @@ export function createSlackTriggerProvider(options: {
         await failWithNotice(
           options.client,
           context.target,
-          `Paseo agent failed: ${reason}`,
+          `Miko agent failed: ${reason}`,
           reactionState,
         );
         return null;

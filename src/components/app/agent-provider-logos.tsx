@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { BotIcon, PackagePlusIcon } from "lucide-react";
 import { cn } from "../../lib/utils.js";
 
-// Brand paths shared with Paseo's provider icons, rendered in the current theme's text colour.
+// Brand paths shared with Miko's provider icons, rendered in the current theme's text colour.
 const PROVIDER_MARKS: Record<string, ReactNode> = {
   claude: (
     <svg
@@ -74,16 +74,16 @@ const PROVIDER_MARKS: Record<string, ReactNode> = {
   kiro: <PackagePlusIcon className="size-4" aria-hidden="true" />,
 };
 
-const PROVIDER_LABELS: Record<string, string> = {
-  claude: "Claude",
-  codex: "Codex",
-  copilot: "GitHub Copilot",
-  kiro: "Kiro",
-  minimax: "MiniMax",
-  omp: "Oh My Pi",
-  opencode: "OpenCode",
-  pi: "Pi",
-};
+const PROVIDER_LABELS = new Map([
+  ["claude", "Claude"],
+  ["codex", "Codex"],
+  ["copilot", "GitHub Copilot"],
+  ["kiro", "Kiro"],
+  ["minimax", "MiniMax"],
+  ["omp", "Oh My Pi"],
+  ["opencode", "OpenCode"],
+  ["pi", "Pi"],
+]);
 
 interface AgentProviderLogo {
   provider: string;
@@ -92,17 +92,24 @@ interface AgentProviderLogo {
   status: "ready" | "loading" | "error" | "unavailable";
 }
 
+/** A provider as people name it. An unknown provider keeps the name its configuration used. */
+export function agentProviderLabel(provider: string): string {
+  return PROVIDER_LABELS.get(provider) ?? provider;
+}
+
+/** One provider's mark, beside a line that names it. Decorative: the name carries the meaning. */
+export function AgentProviderMark({ provider }: { provider: string }) {
+  if (Object.hasOwn(PROVIDER_MARKS, provider)) return PROVIDER_MARKS[provider];
+  return <BotIcon className="size-4" aria-hidden="true" />;
+}
+
 /** A complete provider inventory: overlapping marks, with names and availability in each title. */
 export function AgentProviderLogos({ providers }: { providers: readonly AgentProviderLogo[] }) {
   if (providers.length === 0) return <span className="text-muted-foreground">No providers</span>;
   return (
     <ul aria-label="Providers" className="flex -space-x-1.5">
       {providers.map((entry) => {
-        const label =
-          entry.label ??
-          (Object.hasOwn(PROVIDER_LABELS, entry.provider)
-            ? PROVIDER_LABELS[entry.provider]
-            : entry.provider);
+        const label = entry.label ?? agentProviderLabel(entry.provider);
         const status = entry.enabled ? entry.status : "disabled";
         const description = `${label}: ${status}`;
         return (
@@ -116,11 +123,7 @@ export function AgentProviderLogos({ providers }: { providers: readonly AgentPro
                 : "text-muted-foreground",
             )}
           >
-            {Object.hasOwn(PROVIDER_MARKS, entry.provider) ? (
-              PROVIDER_MARKS[entry.provider]
-            ) : (
-              <BotIcon className="size-4" aria-hidden="true" />
-            )}
+            <AgentProviderMark provider={entry.provider} />
             <span className="sr-only">{description}</span>
           </li>
         );

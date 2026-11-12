@@ -1,4 +1,4 @@
-import type { TriggerContext, TriggerEvent } from "@getpaseo/hub/triggers";
+import type { TriggerContext, TriggerEvent } from "@mikoagents/hub/triggers";
 import { policy } from "./policy.js";
 
 interface PullRequest {
@@ -88,7 +88,7 @@ export async function reviewPullRequest(ctx: TriggerContext) {
           idleTimeout: "10m",
           worktree: {
             mode: "branch-off",
-            newBranch: "verify-${{ paseo.execution.id }}",
+            newBranch: "verify-${{ miko.execution.id }}",
             base: head,
           },
           output: { schema: receiptSchema },
@@ -224,7 +224,7 @@ async function review(
     github: "review",
     maxRuntime: "50m",
     idleTimeout: "10m",
-    worktree: { mode: "branch-off", newBranch: "review-${{ paseo.execution.id }}", base: head },
+    worktree: { mode: "branch-off", newBranch: "review-${{ miko.execution.id }}", base: head },
     output: { schema: receiptSchema },
     prompt: `Review ${policy.repository} PR #${number} at commit ${head}. Verify the candidate, run relevant checks and publish an actual formal GitHub Review, including actionable inline findings. Include REVIEW INCOMPLETE if required verification is unfinished. Call finish_execution with the actual published review_id, commit_sha, url and inline_comments count under output. Report publishing or execution failures with finish_execution({error: reason}).`,
   });

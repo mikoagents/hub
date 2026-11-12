@@ -15,7 +15,7 @@ test("conversation policy uses opaque identity and events without a conversation
 });
 
 test("custom keys render through the existing expression evaluator and reject empty or non-string results", () => {
-  const policy = { mode: "key", key: "${{ paseo.inputs.ticket }}" } as const;
+  const policy = { mode: "key", key: "${{ miko.inputs.ticket }}" } as const;
   assert.equal(
     continuationKey(policy, null, (template) => {
       assert.equal(template, policy.key);

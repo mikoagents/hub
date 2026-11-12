@@ -212,7 +212,7 @@ describe("trigger form YAML bridge", () => {
       githubRepositories: "",
       githubPermissions: "",
       githubDuration: "1h",
-      prompt: "${{ paseo.prompt }}",
+      prompt: "${{ miko.prompt }}",
     });
     const projection = projectTriggerForm(initial);
     if (projection.status !== "editable") throw new Error(projection.reason);
@@ -444,7 +444,7 @@ test("continuation policies round-trip through the form and YAML", () => {
     const yaml = patchTriggerYaml(ADVANCED, {
       ...projection.value,
       continuationMode: mode,
-      continuationKey: "${{ paseo.inputs.ticket }}",
+      continuationKey: "${{ miko.inputs.ticket }}",
     });
     const next = projectTriggerForm(yaml);
     expect(next).toMatchObject({ status: "editable", value: { continuationMode: mode } });

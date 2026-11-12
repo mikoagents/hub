@@ -13,7 +13,7 @@ export class OrganizationTriggers {
     await expect(this.page).toHaveURL(/\/triggers\/new$/u);
     await expect(this.page.getByRole("heading", { name: "New trigger", level: 1 })).toBeVisible();
     await expect(
-      this.page.getByText("paseo-hub trigger init my-trigger", { exact: false }),
+      this.page.getByText("miko trigger init my-trigger", { exact: false }),
     ).toBeVisible();
   }
 }

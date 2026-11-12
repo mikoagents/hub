@@ -6,7 +6,7 @@ import { currentProjectConfigurationFiles } from "../test-utils/current-project-
 
 const describeHubE2E = process.env["RUN_HUB_E2E"] === "1" ? describe : describe.skip;
 
-describeHubE2E("Paseo Hub cross-repository contract", () => {
+describeHubE2E("Miko Hub cross-repository contract", () => {
   let hub: HubE2E;
 
   beforeAll(async () => {
@@ -143,7 +143,7 @@ describeHubE2E("Paseo Hub cross-repository contract", () => {
     });
     assert.deepEqual(configuration.classifierPartial, {
       kind: "partial",
-      path: ".paseo/workflows/partials/classify.md",
+      path: ".miko/workflows/partials/classify.md",
       content:
         "Choose one configured repository environment and one complete named agent configuration.\n",
       contentHash: "dcfb1a4600e287c40ff4da4c38c98ac86a7f5508458b560dde9151aec03f6bf6",

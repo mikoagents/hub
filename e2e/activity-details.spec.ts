@@ -82,6 +82,24 @@ test("inspects run details and every log page in a keyboard-accessible dialog", 
   await trigger.press("Enter");
   const dialog = page.getByRole("dialog", { name: "Activity details" });
   await expect(dialog).toBeVisible();
+  for (const width of [390, 768, 1280, 1920, 2560]) {
+    await page.setViewportSize({ width, height: 900 });
+    const inset = width >= 640 ? 32 : 16;
+    // Visibility arrives before the opening animation reaches the dialog's final bounds.
+    await expect
+      .poll(async () => {
+        const bounds = await dialog.boundingBox();
+        return bounds === null
+          ? Infinity
+          : Math.abs(bounds.width - Math.min(width - inset * 2, 1152));
+      })
+      .toBeLessThan(1);
+    const bounds = await dialog.boundingBox();
+    if (bounds === null) throw new Error("Expected an open detail dialog");
+    expect(bounds.x).toBeGreaterThanOrEqual(inset);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(width - inset);
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
   const dialogHeight = await dialog.evaluate((element) => element.clientHeight);
   await expect(dialog.getByRole("radio", { name: "Conversation", exact: true })).toHaveAttribute(
     "aria-checked",

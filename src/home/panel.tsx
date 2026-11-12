@@ -15,7 +15,7 @@ import { WarningAlert } from "../components/app/failure-alert.js";
 import { PageHeader, PageHeaderSkeleton } from "../components/app/page.js";
 import { RecordList, RecordRow } from "../components/app/record-list.js";
 import { RelativeTime } from "../components/app/relative-time.js";
-import { Section } from "../components/app/section.js";
+import { Section, SectionGrid } from "../components/app/section.js";
 import { StatGrid, StatTile } from "../components/app/stat-tile.js";
 import { StatusPill, statusLabel, type StatusTone } from "../components/app/status-pill.js";
 import { TwoLine } from "../components/app/two-line.js";
@@ -91,74 +91,76 @@ export function HomePanel() {
           />
         </StatGrid>
       </Section>
-      <Section
-        title="Recent runs"
-        action={
-          <Button variant="link" asChild>
-            <Link to={`${base}/activity` as never}>View all</Link>
-          </Button>
-        }
-      >
-        {data.runs.length === 0 ? (
-          <EmptyState
-            title="No runs yet"
-            description="Runs appear here as soon as a trigger launches an agent."
-          />
-        ) : (
-          <RecordList label="Recent runs">
-            {data.runs.slice(0, RECENT_RUNS_SHOWN).map((run) => (
-              <RecordRow
-                key={run.id}
-                status={
-                  <StatusPill tone={runTone(run.status)}>{statusLabel(run.status)}</StatusPill>
-                }
-              >
-                <TwoLine
-                  primary={run.triggerName}
-                  secondary={
-                    <>
-                      {run.source} · <RelativeTime value={run.receivedAt} />
-                    </>
+      <SectionGrid>
+        <Section
+          title="Recent runs"
+          action={
+            <Button variant="link" asChild>
+              <Link to={`${base}/activity` as never}>View all</Link>
+            </Button>
+          }
+        >
+          {data.runs.length === 0 ? (
+            <EmptyState
+              title="No runs yet"
+              description="Runs appear here as soon as a trigger launches an agent."
+            />
+          ) : (
+            <RecordList label="Recent runs">
+              {data.runs.slice(0, RECENT_RUNS_SHOWN).map((run) => (
+                <RecordRow
+                  key={run.id}
+                  status={
+                    <StatusPill tone={runTone(run.status)}>{statusLabel(run.status)}</StatusPill>
                   }
-                />
-              </RecordRow>
-            ))}
-          </RecordList>
-        )}
-      </Section>
-      <Section
-        title="Daemons"
-        action={
-          <Button variant="link" asChild>
-            <Link to={`${base}/daemons` as never}>Manage</Link>
-          </Button>
-        }
-      >
-        {data.daemons.length === 0 ? (
-          <EmptyState
-            title="No daemons"
-            description="Hub runs your triggers on machines you own. The checklist above has the command."
-          />
-        ) : (
-          <RecordList label="Daemons">
-            {data.daemons.map((daemon) => (
-              <RecordRow
-                key={daemon.id}
-                status={
-                  <StatusPill tone={daemon.presence === "connected" ? "success" : "neutral"}>
-                    {daemon.presence === "connected" ? "Connected" : "Offline"}
-                  </StatusPill>
-                }
-              >
-                <TwoLine
-                  primary={daemon.slug}
-                  secondary={daemon.canExecute ? "Hub automations" : "Connected only"}
-                />
-              </RecordRow>
-            ))}
-          </RecordList>
-        )}
-      </Section>
+                >
+                  <TwoLine
+                    primary={run.triggerName}
+                    secondary={
+                      <>
+                        {run.source} · <RelativeTime value={run.receivedAt} />
+                      </>
+                    }
+                  />
+                </RecordRow>
+              ))}
+            </RecordList>
+          )}
+        </Section>
+        <Section
+          title="Daemons"
+          action={
+            <Button variant="link" asChild>
+              <Link to={`${base}/daemons` as never}>Manage</Link>
+            </Button>
+          }
+        >
+          {data.daemons.length === 0 ? (
+            <EmptyState
+              title="No daemons"
+              description="Hub runs your triggers on machines you own. The checklist above has the command."
+            />
+          ) : (
+            <RecordList label="Daemons">
+              {data.daemons.map((daemon) => (
+                <RecordRow
+                  key={daemon.id}
+                  status={
+                    <StatusPill tone={daemon.presence === "connected" ? "success" : "neutral"}>
+                      {daemon.presence === "connected" ? "Connected" : "Offline"}
+                    </StatusPill>
+                  }
+                >
+                  <TwoLine
+                    primary={daemon.slug}
+                    secondary={daemon.canExecute ? "Hub automations" : "Connected only"}
+                  />
+                </RecordRow>
+              ))}
+            </RecordList>
+          )}
+        </Section>
+      </SectionGrid>
     </>
   );
 }
@@ -404,7 +406,7 @@ function runHint(triggers: HomeSnapshot["triggers"]): string {
     if (code) {
       hints.add(
         event === "manual.run"
-          ? `Run it from Triggers or use paseo-hub trigger run ${name}.`
+          ? `Run it from Triggers or use miko trigger run ${name}.`
           : "It runs when its subscribed events arrive; inspect its source in Triggers.",
       );
       continue;

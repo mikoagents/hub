@@ -6,8 +6,15 @@ export interface SourceLocation {
 }
 
 export interface CodeField {
-  status: "known" | "runtime" | "unset";
+  /**
+   * `known` is fixed in the code. `choice` is one of `values`, picked when the workflow runs —
+   * `ctx.event.source === "manual" ? "recovery" : "review"`. `runtime` is computed by
+   * `expression`, and `unset` is left out for the default to apply.
+   */
+  status: "known" | "choice" | "runtime" | "unset";
   value: string | null;
+  /** The values a `choice` picks between; empty for every other status. */
+  values: string[];
   expression: string | null;
   source: SourceLocation | null;
 }

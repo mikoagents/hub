@@ -112,14 +112,14 @@ describe("GitHub registration", () => {
     await configuration.push(registration, "invalid-sha", "push-invalid");
     assert.equal((await database.findActiveProjectConfiguration(project.id))?.id, active?.id);
     assert.deepEqual(configuration.reads, [
-      { installationId: 42, repositoryId: 9001, commitSha: "valid-sha", path: ".paseo/hub.yml" },
+      { installationId: 42, repositoryId: 9001, commitSha: "valid-sha", path: ".miko/hub.yml" },
       {
         installationId: 42,
         repositoryId: 9001,
         commitSha: "valid-sha",
-        path: ".paseo/workflows/noop.yml",
+        path: ".miko/workflows/noop.yml",
       },
-      { installationId: 42, repositoryId: 9001, commitSha: "invalid-sha", path: ".paseo/hub.yml" },
+      { installationId: 42, repositoryId: 9001, commitSha: "invalid-sha", path: ".miko/hub.yml" },
     ]);
     assert.equal(
       (await database.projectConfigurationReadModel(project.id)).lastSyncAttempt?.outcome,
@@ -152,7 +152,7 @@ describe("GitHub registration", () => {
       publicBaseUrl: "https://hub.test",
       configuration: {
         appId: "42",
-        appSlug: "paseo",
+        appSlug: "miko",
         clientId: "client",
         clientSecret: "secret",
         webhookSecret: "webhook-secret",
@@ -165,7 +165,7 @@ describe("GitHub registration", () => {
           Promise.resolve({ token: "token", expiresAt: Date.now() + 3600_000 }),
         mintInstallationAccessToken: () =>
           Promise.resolve({ token: "scoped-token", expiresAt: Date.now() + 3_600_000 }),
-        getAppBotIdentity: () => Promise.resolve({ id: 123, login: "paseo[bot]" }),
+        getAppBotIdentity: () => Promise.resolve({ id: 123, login: "miko[bot]" }),
         revokeInstallationToken: () => Promise.resolve(),
         createInstallationOctokit: () => Promise.reject(new Error("unused")),
       },
@@ -259,7 +259,7 @@ describe("GitHub registration", () => {
         },
         mintInstallationAccessToken: () =>
           Promise.resolve({ token: "scoped-token", expiresAt: Date.now() + 3_600_000 }),
-        getAppBotIdentity: () => Promise.resolve({ id: 123, login: "paseo[bot]" }),
+        getAppBotIdentity: () => Promise.resolve({ id: 123, login: "miko[bot]" }),
         revokeInstallationToken: () => Promise.resolve(),
         createInstallationOctokit: () => Promise.reject(new Error("unused")),
       },
@@ -327,7 +327,7 @@ describe("GitHub registration", () => {
           identityLookups += 1;
           identityTokens.push(token);
           if (identityFailure !== undefined) return Promise.reject(identityFailure);
-          return Promise.resolve({ id: 123, login: "paseo[bot]" });
+          return Promise.resolve({ id: 123, login: "miko[bot]" });
         },
         revokeInstallationToken: (token) => {
           revoked.push(token);
@@ -362,7 +362,7 @@ describe("GitHub registration", () => {
       token: "scoped-token",
       expiresAt: minted.expiresAt,
       botUserId: 123,
-      botLogin: "paseo[bot]",
+      botLogin: "miko[bot]",
     });
     assert.equal(identityLookups, 1);
     assert.deepEqual(identityTokens, ["scoped-token"]);
@@ -509,7 +509,7 @@ class RegistrationConfigurationFake implements GitHubConfigurationProvider {
         configurationBundleFixture(yaml).map(({ path }) => ({ path, kind: "file" as const })),
       );
     } catch {
-      return Promise.resolve([{ path: ".paseo/hub.yml", kind: "file" as const }]);
+      return Promise.resolve([{ path: ".miko/hub.yml", kind: "file" as const }]);
     }
   }
   readFileAtCommit(input: { repositoryId: number; commitSha: string; path: string }) {
@@ -522,7 +522,7 @@ class RegistrationConfigurationFake implements GitHubConfigurationProvider {
           ({ path }) => path === input.path,
         )?.content;
       } catch {
-        content = input.path === ".paseo/hub.yml" ? rawYaml : undefined;
+        content = input.path === ".miko/hub.yml" ? rawYaml : undefined;
       }
     }
     return Promise.resolve(content === undefined ? undefined : { kind: "file" as const, content });
@@ -614,7 +614,7 @@ class SignedOutAuth extends RegistrationAuth {
 function githubConfiguration() {
   return {
     appId: "42",
-    appSlug: "paseo",
+    appSlug: "miko",
     clientId: "client",
     clientSecret: "secret",
     webhookSecret: "webhook-secret",
@@ -646,7 +646,7 @@ function githubAuth() {
       Promise.resolve({ token: "token", expiresAt: Date.now() + 3600_000 }),
     mintInstallationAccessToken: () =>
       Promise.resolve({ token: "scoped-token", expiresAt: Date.now() + 3_600_000 }),
-    getAppBotIdentity: () => Promise.resolve({ id: 123, login: "paseo[bot]" }),
+    getAppBotIdentity: () => Promise.resolve({ id: 123, login: "miko[bot]" }),
     revokeInstallationToken: () => Promise.resolve(),
     createInstallationOctokit: () => Promise.reject(new Error("unused")),
   };

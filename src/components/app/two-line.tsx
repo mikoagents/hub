@@ -15,6 +15,7 @@ export function TwoLine({
   secondary,
   mono = false,
   path = false,
+  wrap = false,
 }: {
   primary: ReactNode;
   secondary?: ReactNode;
@@ -25,12 +26,20 @@ export function TwoLine({
    * so it gives way from the start and keeps its end.
    */
   path?: boolean;
+  /**
+   * The primary line is a run of names a reader needs all of — the events one scope starts a
+   * Trigger on — so it wraps instead of truncating. Never in a table, whose rows keep one height.
+   */
+  wrap?: boolean;
 }) {
   return (
     // In a filling cell the record also takes the row it sits in, beside a glyph or not, so its
     // secondary line has the whole column to give way in rather than the primary line's width.
     <span className="flex min-w-0 flex-col gap-0.5 in-data-[slot=fill-cell]:grow">
-      <span className="truncate text-sm" title={titleOf(primary)}>
+      <span
+        className={wrap ? "text-sm break-words" : "truncate text-sm"}
+        title={wrap ? undefined : titleOf(primary)}
+      >
         {primary}
       </span>
       {secondary === undefined ? null : (

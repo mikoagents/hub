@@ -5,7 +5,7 @@ import { ORGANIZATION_ROLES } from "./organization-contract.js";
 import { capabilitiesFor } from "./organization-policy.js";
 import type { OperationAuthorizationResult } from "./api-keys.js";
 
-export const CLI_CREDENTIAL_PREFIX = "paseo_cli_";
+export const CLI_CREDENTIAL_PREFIX = "miko_cli_";
 const CLI_CREDENTIAL_PREFIX_LENGTH = 12;
 const credentialRoles = ORGANIZATION_ROLES.filter((role) => capabilitiesFor(role).manageResources);
 

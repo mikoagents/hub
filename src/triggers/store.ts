@@ -177,7 +177,7 @@ function daemonUnavailable(slug: string, error: unknown): string {
     return `"${slug}" is not connected, so Hub cannot check this agent against it. Connect the daemon and save again.`;
   }
   if (reason === "daemon_execution_not_allowed") {
-    return `"${slug}" cannot run Hub automations. Run \`paseo hub permissions grant hub.execute\` on it and save again.`;
+    return `"${slug}" cannot run Hub automations. Run \`miko hub permissions grant hub.execute\` on it and save again.`;
   }
   return `"${slug}" could not check this agent: ${reason}`;
 }

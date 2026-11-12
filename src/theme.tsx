@@ -11,7 +11,7 @@ import {
 export type Theme = "system" | "light" | "dark";
 type ResolvedTheme = Exclude<Theme, "system">;
 
-export const THEME_STORAGE_KEY = "paseo-hub-theme";
+export const THEME_STORAGE_KEY = "miko-hub-theme";
 const SYSTEM_THEME_QUERY = "(prefers-color-scheme: dark)";
 
 /** Run before the body is painted, even when the application has not hydrated yet. */

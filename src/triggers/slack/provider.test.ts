@@ -304,7 +304,7 @@ describe("Slack Phase 1 trigger provider", () => {
         teamId: "T1",
         channelId: "C1",
         threadTs: "1700000000.000001",
-        content: "Paseo agent failed: boom",
+        content: "Miko agent failed: boom",
       },
     ]);
   });
@@ -782,7 +782,7 @@ function inputConfiguration() {
           {
             ...trigger.steps[0]!,
             agent: { provider: "codex", mode: "full-access" },
-            prompt: [{ text: "Request: ${{ paseo.prompt }}" }],
+            prompt: [{ text: "Request: ${{ miko.prompt }}" }],
           },
         ],
       },

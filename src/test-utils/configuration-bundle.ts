@@ -18,7 +18,7 @@ export function configurationBundleFixture(yaml: string): HubBundleFile[] {
   );
   const files: HubBundleFile[] = [
     {
-      path: ".paseo/hub.yml",
+      path: ".miko/hub.yml",
       content: dump({ environments, agents: {} }, { noRefs: true, lineWidth: -1 }),
     },
   ];
@@ -28,7 +28,7 @@ export function configurationBundleFixture(yaml: string): HubBundleFile[] {
     }
     rewriteFixtureIncludes(trigger);
     files.push({
-      path: `.paseo/workflows/${trigger["name"]}.yml`,
+      path: `.miko/workflows/${trigger["name"]}.yml`,
       content: dump(trigger, { noRefs: true, lineWidth: -1 }),
     });
   }

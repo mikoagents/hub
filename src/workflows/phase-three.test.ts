@@ -14,12 +14,12 @@ describe("Phase 3 structured routing contract", () => {
     };
     assert.equal(
       evaluateExpression(
-        parseExpression("paseo.inputs.repo != null && steps.classify.outputs.repo == 'hub'"),
+        parseExpression("miko.inputs.repo != null && steps.classify.outputs.repo == 'hub'"),
         context,
       ),
       false,
     );
-    assert.equal(evaluateExpression(parseExpression("paseo.inputs.repo ?? 'hub'"), context), "hub");
+    assert.equal(evaluateExpression(parseExpression("miko.inputs.repo ?? 'hub'"), context), "hub");
     assert.deepEqual(evaluateExpression(parseExpression('{"repo":["hub", null]}'), context), {
       repo: ["hub", null],
     });
@@ -41,12 +41,12 @@ describe("Phase 3 structured routing contract", () => {
             repo: { type: "string", choices: ["paseo", "hub"] },
           },
           values: {
-            selected_repo: "${{ paseo.inputs.repo ?? steps.classify.outputs.repo }}",
+            selected_repo: "${{ miko.inputs.repo ?? steps.classify.outputs.repo }}",
           },
           steps: [
             {
               id: "classify",
-              if: "${{ paseo.inputs.repo == null }}",
+              if: "${{ miko.inputs.repo == null }}",
               environment: "runner",
               max_runtime: "2m",
               idle_timeout: "30s",

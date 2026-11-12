@@ -258,7 +258,7 @@ export function createDiscordTriggerProvider(options: {
         await postThreadNotice(
           options.bot,
           triggerContext.target,
-          `Paseo machine terminated before the agent could complete: ${reason}`,
+          `Miko machine terminated before the agent could complete: ${reason}`,
         );
         return null;
       }

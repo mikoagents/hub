@@ -143,7 +143,7 @@ describe("execution capability MCP boundary", () => {
   it("interoperates with the official MCP client for discovery and completion", async () => {
     const fixture = await capabilityFixture();
     const endpoint = await serveFixture(fixture);
-    const client = new Client({ name: "paseo-hub-test", version: "1.0.0" });
+    const client = new Client({ name: "miko-hub-test", version: "1.0.0" });
     const transport = new StreamableHTTPClientTransport(new URL(endpoint.url), {
       requestInit: { headers: { authorization: "Bearer token" } },
     });
@@ -194,7 +194,7 @@ describe("execution capability MCP boundary", () => {
       properties: { repo: { type: "string", enum: ["paseo", "hub"] } },
     });
     const endpoint = await serveFixture(fixture);
-    const client = new Client({ name: "paseo-hub-test", version: "1.0.0" });
+    const client = new Client({ name: "miko-hub-test", version: "1.0.0" });
     const transport = new StreamableHTTPClientTransport(new URL(endpoint.url), {
       requestInit: { headers: { authorization: "Bearer token" } },
     });
@@ -240,7 +240,7 @@ describe("execution capability MCP boundary", () => {
                 "Report unsuccessful work with its reason. Omit output when reporting failure.",
             },
             output: {
-              $id: "urn:paseo:hub:finish-execution-output",
+              $id: "urn:miko:hub:finish-execution-output",
               type: "object",
               additionalProperties: false,
               required: ["repo"],
@@ -446,7 +446,7 @@ describe("execution capability MCP boundary", () => {
             "Report unsuccessful work with its reason. Omit output when reporting failure.",
         },
         output: {
-          $id: "urn:paseo:hub:finish-execution-output",
+          $id: "urn:miko:hub:finish-execution-output",
           $schema: "http://json-schema.org/draft-07/schema#",
           $defs: {
             repo: { type: "string", minLength: 3, pattern: "^(paseo|hub)$" },

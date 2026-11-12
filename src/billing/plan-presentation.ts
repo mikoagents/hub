@@ -33,7 +33,7 @@ export const HUB_PLAN_PRESENTATIONS: BillingPlanPresentations = {
   hosted: {
     name: "Pro",
     features: [
-      { key: "hub-operation", label: "Paseo operates Hub", tooltip: null },
+      { key: "hub-operation", label: "Miko operates Hub", tooltip: null },
       {
         key: "managed-triggers",
         label: "Managed GitHub, Slack, and Discord triggers",

@@ -22,7 +22,7 @@ export function createInvitationMailer(delivery: EmailDelivery): InvitationMaile
       const expiry = `This invitation expires at ${invitation.expiresAt.toISOString()}.`;
       return delivery.send({
         to: invitation.email,
-        subject: `Join ${invitation.organizationName} on Paseo`,
+        subject: `Join ${invitation.organizationName} on Miko Hub`,
         text: `${introduction}\n\nAccept the invitation: ${invitation.link}\n\n${expiry}`,
         html: `<p>${escapeHtml(introduction)}</p><p><a href="${escapeHtml(invitation.link)}">Join ${escapeHtml(invitation.organizationName)}</a></p><p>${escapeHtml(expiry)}</p>`,
         idempotencyKey: `paseo-invitation-${invitation.id}`,

@@ -66,7 +66,7 @@ export class SourcePaseo {
 
   static async start(options: SourcePaseoOptions = {}): Promise<SourcePaseo> {
     const ownsRoot = options.root === undefined;
-    const root = options.root ?? (await mkdtemp(join(tmpdir(), "paseo-source-e2e-")));
+    const root = options.root ?? (await mkdtemp(join(tmpdir(), "miko-source-e2e-")));
     try {
       const packagesRoot = await packagePaseoArtifacts(resolvePaseoWorktree());
       const paseoHome = options.paseoHome ?? join(root, "paseo-home");

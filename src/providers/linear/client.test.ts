@@ -112,7 +112,7 @@ describe("Linear connection client", () => {
                   id: "comment-2",
                   body: "second",
                   createdAt: "2023-11-14T22:13:19.002Z",
-                  user: { id: "user-2", name: "Paseo" },
+                  user: { id: "user-2", name: "Miko" },
                 },
                 {
                   id: "comment-1",
@@ -147,7 +147,7 @@ describe("Linear connection client", () => {
           id: "comment-2",
           body: "second",
           createdAt: "2023-11-14T22:13:19.002Z",
-          author: { id: "user-2", name: "Paseo" },
+          author: { id: "user-2", name: "Miko" },
         },
       ],
     });

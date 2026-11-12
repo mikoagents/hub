@@ -8,7 +8,7 @@ import type {
 
 export interface DaemonCreateAgentOptions {
   provider: string;
-  /** Explicit agent title, shown beside the workspace title in Paseo. */
+  /** Explicit agent title, shown beside the workspace title in Miko. */
   title?: string;
   /** Title for the workspace the daemon creates for the agent, set once the agent exists. */
   workspaceTitle?: string;

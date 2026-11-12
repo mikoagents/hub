@@ -119,6 +119,22 @@ export function CodeBlock({ label, children }: { label?: string; children: strin
 }
 
 /**
+ * Code inside a line of text: the expression a setting is computed by when it has no fixed value.
+ * The fill sets it apart from the names and values around it, which are never code. A line that
+ * holds it may cut it short, so the whole of it is one hover away.
+ */
+export function InlineCode({ children }: { children: string }) {
+  return (
+    <code
+      className="rounded-sm bg-muted box-decoration-clone px-1 font-mono text-xs"
+      title={children}
+    >
+      {children}
+    </code>
+  );
+}
+
+/**
  * A value to copy, its label, and the one control that copies it.
  *
  * `focusOnMount` is for a value shown once and never again — a generated secret — where the

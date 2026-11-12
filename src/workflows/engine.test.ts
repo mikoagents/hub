@@ -115,7 +115,7 @@ describe("durable multi-step workflow engine", () => {
     },
   );
 
-  it("materializes ambient context only for the step that authors paseo.context", async () => {
+  it("materializes ambient context only for the step that authors miko.context", async () => {
     const fixture = await workflowFixture({ rawConfiguration: contextOptInConfiguration() });
     const prompts: string[] = [];
     const materializedExecutionIds: string[] = [];
@@ -728,14 +728,14 @@ describe("durable multi-step workflow engine", () => {
   });
 
   it("launches the exact committed partial content with inline-equivalent interpolation", async () => {
-    const content = "Committed partial for ${{ paseo.prompt }} / ${{ paseo.inputs.repo }}";
+    const content = "Committed partial for ${{ miko.prompt }} / ${{ miko.inputs.repo }}";
     const fixture = await workflowFixture({
       rawConfiguration: partialRuntimeConfiguration(),
       resolvedPromptPartials: new Map([
         [
-          ".paseo/workflows/partials/instructions.md",
+          ".miko/workflows/partials/instructions.md",
           {
-            path: ".paseo/workflows/partials/instructions.md",
+            path: ".miko/workflows/partials/instructions.md",
             content,
             contentHash: hashPromptPartialContent(content),
           },
@@ -1021,7 +1021,7 @@ describe("durable multi-step workflow engine", () => {
     assert.equal(intents.length, 1);
     assert.equal(intents[0]?.github, undefined);
     assert.deepEqual(intents[0]?.env, {
-      SOME_TOKEN: "${{ paseo.connections.some-connection.token }}",
+      SOME_TOKEN: "${{ miko.connections.some-connection.token }}",
     });
   });
 
@@ -1770,7 +1770,7 @@ function partialRuntimeConfiguration(): Record<string, unknown> {
             agent: { provider: "codex" },
             prompt: [
               { include: "partials/instructions.md" },
-              { text: "Inline ${{ paseo.prompt }} / ${{ paseo.inputs.repo }}" },
+              { text: "Inline ${{ miko.prompt }} / ${{ miko.inputs.repo }}" },
             ],
           },
         ],
@@ -1852,7 +1852,7 @@ function contextOptInConfiguration(): Record<string, unknown> {
             max_runtime: "10m",
             idle_timeout: "1m",
             agent: { provider: "codex" },
-            prompt: [{ text: "Trigger: ${{ paseo.prompt }}" }],
+            prompt: [{ text: "Trigger: ${{ miko.prompt }}" }],
           },
           {
             id: "with-context",
@@ -1860,7 +1860,7 @@ function contextOptInConfiguration(): Record<string, unknown> {
             max_runtime: "10m",
             idle_timeout: "1m",
             agent: { provider: "codex" },
-            prompt: [{ text: "Context: ${{ paseo.context }}\nTrigger: ${{ paseo.prompt }}" }],
+            prompt: [{ text: "Context: ${{ miko.context }}\nTrigger: ${{ miko.prompt }}" }],
           },
         ],
       },
@@ -2027,7 +2027,7 @@ function skippedAuthorityConfiguration(): Record<string, unknown> {
             idle_timeout: "1m",
             agent: { provider: "codex" },
             prompt: [{ text: "Work" }],
-            env: { SOME_TOKEN: "${{ paseo.connections.some-connection.token }}" },
+            env: { SOME_TOKEN: "${{ miko.connections.some-connection.token }}" },
           },
         ],
       },
@@ -2110,12 +2110,12 @@ function baseConfiguration(options: { unavailableValue?: boolean }): Record<stri
           repo:
             options.unavailableValue === true
               ? "${{ steps.classify.outputs.repo }}"
-              : "${{ paseo.inputs.repo ?? steps.classify.outputs.repo }}",
+              : "${{ miko.inputs.repo ?? steps.classify.outputs.repo }}",
         },
         steps: [
           {
             id: "classify",
-            if: "${{ paseo.inputs.repo == null }}",
+            if: "${{ miko.inputs.repo == null }}",
             environment: "runner",
             max_runtime: "2m",
             idle_timeout: "30s",
@@ -2174,7 +2174,7 @@ function terminalRecoveryConfiguration(): Record<string, unknown> {
           },
           {
             id: "downstream",
-            if: "${{ paseo.inputs.repo == 'hub' }}",
+            if: "${{ miko.inputs.repo == 'hub' }}",
             environment: "runner",
             max_runtime: "2m",
             idle_timeout: "30s",
@@ -2204,7 +2204,7 @@ function executionWorktreeConfiguration(): Record<string, unknown> {
         kind: "daemon",
         daemon: "runner",
         cwd: "/workspace",
-        worktree: { mode: "branch-off", newBranch: "trigger-${{ paseo.execution.id }}" },
+        worktree: { mode: "branch-off", newBranch: "trigger-${{ miko.execution.id }}" },
       },
     ],
     triggers: ["first", "second"].map((name) => ({
@@ -2212,7 +2212,7 @@ function executionWorktreeConfiguration(): Record<string, unknown> {
       on: "manual.run",
       max_runtime: "1h",
       steps: [
-        step(`work-${name}`, name === "first" ? "Intake · ${{ paseo.execution.id }}" : undefined),
+        step(`work-${name}`, name === "first" ? "Intake · ${{ miko.execution.id }}" : undefined),
       ],
     })),
   };

@@ -43,7 +43,7 @@ export function DetailDialog({
       {trigger}
       <DialogContent
         className={cn(
-          "flex flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl",
+          "flex flex-col gap-0 overflow-hidden p-0 sm:w-[calc(100%-4rem)] sm:max-w-6xl",
           toolbar === undefined
             ? undefined
             : "h-[calc(100dvh-2rem)] sm:h-[min(48rem,calc(100dvh-4rem))]",

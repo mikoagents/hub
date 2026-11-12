@@ -1,6 +1,6 @@
-# Paseo Hub
+# Miko Hub
 
-Paseo Hub is the self-hosted open-source automation layer for Miko (`mikoagents/miko-daemon`) execution daemons.
+Miko Hub is the self-hosted open-source automation layer for Miko (`mikoagents/miko-daemon`) execution daemons.
 
 This repository contains the open-source Hub codebase. Its Fly files contain only the minimal,
 non-secret deployment wiring. Credentials, private workflow configuration, and operational
@@ -27,13 +27,13 @@ branch and follow the upstream maintenance and documentation procedures.
 
 # Product Vision
 
-Paseo Hub is an open, self-hosted coordination layer for the agents users already run.
+Miko Hub is an open, self-hosted coordination layer for the agents users already run.
 
 It connects conversations and events from services such as GitHub, Slack, and Discord to configurable, multi-step agent workflows without taking ownership of the user's code, credentials, infrastructure, or security model.
 
 Hub provides explicit building blocks: triggers, routing, environments, provider settings, credentials, context, outputs, and completion contracts. Workflow authors decide which building blocks each step receives and how they are composed. Hub must never silently broaden permissions, inject context, rewrite prompts, or impose a particular way of working.
 
-Provider-specific capabilities remain provider-specific. Paseo validates and passes them through faithfully, allowing users to rely on each provider's native sandboxing, permission modes, models, and documented behavior rather than learning lossy Paseo abstractions.
+Provider-specific capabilities remain provider-specific. Miko Hub validates and passes them through faithfully, allowing users to rely on each provider's native sandboxing, permission modes, models, and documented behavior rather than learning lossy Miko Hub abstractions.
 
 The goal is to make sophisticated agent workflows easy to assemble while keeping authority visible, configuration portable, and control with the operator. Defaults should make common workflows straightforward, but every consequential behavior must remain explicit and optional.
 

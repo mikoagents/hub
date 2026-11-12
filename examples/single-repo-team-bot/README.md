@@ -5,7 +5,7 @@ worktree based on `origin/main`.
 
 ## Configure the example
 
-Copy `.paseo` to your repository root, then replace these values:
+Copy `.miko` to your repository root, then replace these values:
 
 | Placeholder                         | Value                                    |
 | ----------------------------------- | ---------------------------------------- |
@@ -26,8 +26,8 @@ allowlists narrow; wildcards are not supported.
 From the repository root:
 
 ```sh
-paseo hub deploy -p your-project --dry-run
-paseo hub deploy -p your-project
+miko hub deploy -p your-project --dry-run
+miko hub deploy -p your-project
 ```
 
 The classifier labels the request without write access. The worker receives the original prompt,

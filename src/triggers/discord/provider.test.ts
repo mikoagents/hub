@@ -512,12 +512,12 @@ describe("Discord Phase 1 trigger provider", () => {
         {
           channelId: "200",
           threadId: "207",
-          content: "Paseo agent failed: boom",
+          content: "Miko agent failed: boom",
         },
         {
           channelId: "200",
           threadId: "207",
-          content: "Paseo machine terminated before the agent could complete: launch_failed",
+          content: "Miko machine terminated before the agent could complete: launch_failed",
         },
       ],
     );
@@ -655,7 +655,7 @@ function inputConfiguration() {
           {
             ...trigger.steps[0]!,
             agent: { provider: "codex", mode: "bypassPermissions" },
-            prompt: [{ text: "Request: ${{ paseo.prompt }}" }],
+            prompt: [{ text: "Request: ${{ miko.prompt }}" }],
           },
         ],
       },

@@ -74,14 +74,12 @@ test("walks a hosted organization from sign-in to its first run", async ({ hub, 
   });
 
   await test.step("deploying code to the connected daemon completes the third step", async () => {
-    await expect(
-      page.getByText("paseo-hub trigger init my-trigger", { exact: false }),
-    ).toBeVisible();
+    await expect(page.getByText("miko trigger init my-trigger", { exact: false })).toBeVisible();
     await hub.deployCodeTrigger("owner", manualTriggerArtifact("deploy", daemon));
     await home.open();
     await home.expectStep("Create a trigger", "Done");
     await home.expectStep("Run it", "To do");
-    await home.expectStep("Run it", "paseo-hub trigger run deploy");
+    await home.expectStep("Run it", "miko trigger run deploy");
     await home.expectProgress("3 of 4 done");
   });
 

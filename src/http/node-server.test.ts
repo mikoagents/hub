@@ -369,7 +369,7 @@ class CliAuthorizationServer {
 
   static async start(trustedClientIpHeader?: string): Promise<CliAuthorizationServer> {
     const database = createMemoryDatabase({ organizationIds: ["acme"] });
-    const authorizations = new CliAuthorizations(database, undefined, "https://hub.paseo.test");
+    const authorizations = new CliAuthorizations(database, undefined, "https://hub.miko.test");
     const server = createFetchServer(
       (request) => authorizations.start(request),
       trustedClientIpHeader === undefined ? {} : { trustedClientIpHeader },

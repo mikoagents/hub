@@ -368,14 +368,14 @@ builtServerTests("built TanStack public API PostgreSQL contract", () => {
     const yaml = partialConfigurationYaml();
     const baseFiles = configurationBundleFixture(yaml);
     const partial = (content: unknown) => ({
-      path: ".paseo/workflows/partials/docs/safety.md",
+      path: ".miko/workflows/partials/docs/safety.md",
       content,
     });
     const cases = [
       {
         name: "missing",
         body: { projectSlug: "bundle-project", files: baseFiles },
-        expectedPath: [".paseo/workflows/partials/docs/safety.md"],
+        expectedPath: [".miko/workflows/partials/docs/safety.md"],
       },
       {
         name: "unsafe",
@@ -391,15 +391,15 @@ builtServerTests("built TanStack public API PostgreSQL contract", () => {
           projectSlug: "bundle-project",
           files: [...baseFiles, partial("one"), partial("two")],
         },
-        expectedPath: [".paseo/workflows/partials/docs/safety.md"],
+        expectedPath: [".miko/workflows/partials/docs/safety.md"],
       },
       {
         name: "toml",
         body: {
           projectSlug: "bundle-project",
-          files: [...baseFiles, { path: ".paseo/hub.toml", content: "" }],
+          files: [...baseFiles, { path: ".miko/hub.toml", content: "" }],
         },
-        expectedPath: [".paseo/hub.toml"],
+        expectedPath: [".miko/hub.toml"],
       },
     ] as const;
     for (const testCase of cases) {
@@ -444,7 +444,7 @@ builtServerTests("built TanStack public API PostgreSQL contract", () => {
       `select raw_yaml,
               jsonb_path_query_first(
                 source_evidence,
-                '$.bundle.files[*] ? (@.path == ".paseo/workflows/partials/docs/safety.md")'
+                '$.bundle.files[*] ? (@.path == ".miko/workflows/partials/docs/safety.md")'
               )->>'content' as partial_content
        from project_configuration_revisions revision
        join projects project on project.id = revision.project_id

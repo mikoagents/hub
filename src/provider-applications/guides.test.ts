@@ -117,12 +117,12 @@ test("only non-secret identifiers can be echoed back into the form", () => {
 
 test("identity lines name the app the operator created", () => {
   assert.equal(
-    identityLabel({ provider: "github", id: "42", name: "Paseo Hub", ownerLogin: "acme-inc" }),
-    "Paseo Hub · owned by acme-inc",
+    identityLabel({ provider: "github", id: "42", name: "Miko Hub", ownerLogin: "acme-inc" }),
+    "Miko Hub · owned by acme-inc",
   );
   assert.equal(
-    identityLabel({ provider: "discord", id: "900", name: "Paseo" }),
-    "Paseo · application 900",
+    identityLabel({ provider: "discord", id: "900", name: "Miko" }),
+    "Miko · application 900",
   );
 });
 
@@ -341,7 +341,7 @@ test("environment-managed copy can name the exact variables the operator has to 
   ]);
 });
 
-test("no guide leaks Paseo's internal vocabulary into operator-facing copy", () => {
+test("no guide leaks Miko Hub's internal vocabulary into operator-facing copy", () => {
   const forbidden = [
     "runtime configuration",
     "database",

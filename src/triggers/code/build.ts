@@ -51,7 +51,7 @@ export async function buildTrigger(
     metafile: true,
     absWorkingDir: root,
     alias: {
-      "@getpaseo/hub/triggers": sdk,
+      "@mikoagents/hub/triggers": sdk,
     },
   });
   const code = result.outputFiles[0]?.text;

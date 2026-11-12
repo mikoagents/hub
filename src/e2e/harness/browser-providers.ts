@@ -91,7 +91,7 @@ export class BrowserGitHubAuth implements GitHubAuth {
   }
 
   getAppBotIdentity() {
-    return Promise.resolve({ id: 12345, login: "paseo[bot]" });
+    return Promise.resolve({ id: 12345, login: "miko[bot]" });
   }
 
   revokeInstallationToken() {

@@ -1,6 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 import { test } from "./app.js";
-import type { PaseoHub } from "./helpers/hub.js";
+import type { MikoHub } from "./helpers/hub.js";
 import { projectApp } from "./helpers/projects/index.js";
 import { holdPageScripts, holdPageData } from "./helpers/pending-navigation.js";
 import { OrganizationTriggers, manualTriggerArtifact } from "./helpers/triggers.js";
@@ -136,7 +136,7 @@ test("replaces the old body while destination data is delayed", async ({ hub, pa
   await expectOrganizationPage(page, "Daemons");
 });
 
-async function openOrganization(hub: PaseoHub, page: Page) {
+async function openOrganization(hub: MikoHub, page: Page) {
   await hub.signUpAs("owner", owner);
   await hub.createOrganization("owner", "Acme");
   await expectOrganizationPage(page, "Home");

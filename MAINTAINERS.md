@@ -1,4 +1,4 @@
-# Maintaining Paseo Hub
+# Maintaining Miko Hub
 
 This guide covers repository operations for maintainers. Product usage belongs in the
 [public Hub documentation](https://paseo.sh/docs/hub); architecture decisions live under
@@ -33,7 +33,7 @@ uses Oxfmt, not Prettier.
 
 ## Publish a release
 
-A Hub release is three artifacts: the `@getpaseo/hub` npm package, a multi-architecture
+A Hub release is three artifacts: the `@mikoagents/hub` npm package, a multi-architecture
 container image, and a GitHub Release. npm is published locally; the tag publishes the other two.
 A release is not done until all three are out.
 
@@ -56,14 +56,14 @@ A release is not done until all three are out.
    ```sh
    npm whoami
    npm publish --access public
-   npm view @getpaseo/hub version
-   cd "$(mktemp -d)" && npx @getpaseo/hub@<version>
+   npm view @mikoagents/hub version
+   cd "$(mktemp -d)" && npx @mikoagents/hub@<version>
    ```
 
 6. Create an annotated tag on the release commit and push it:
 
    ```sh
-   git tag -a v<version> <commit> -m "Paseo Hub v<version>"
+   git tag -a v<version> <commit> -m "Miko Hub v<version>"
    git push origin v<version>
    ```
 
@@ -74,7 +74,7 @@ creates or updates the GitHub Release from the matching changelog section. Prere
 move `latest`.
 
 Before announcing the release, verify the GitHub Release, anonymous access to both image tags, and
-that `npm view @getpaseo/hub dist-tags` shows the new version as `latest`. Later changes to the
+that `npm view @mikoagents/hub dist-tags` shows the new version as `latest`. Later changes to the
 current changelog section update the existing release notes through
 [Release Notes Sync](.github/workflows/release-notes-sync.yml).
 

@@ -134,31 +134,31 @@ jobs:
   browser-e2e:
     runs-on: ubuntu-latest
     env:
-      MIKO_E2E_WORKTREE: ${{ github.workspace }}/paseo-source
+      MIKO_E2E_WORKTREE: ${{ github.workspace }}/miko-source
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - name: Require the exact Paseo companion commit
+      - name: Require the exact Miko companion commit
         run: |
           [[ "$MIKO_E2E_COMMIT" =~ ^[0-9a-f]{40}$ ]] || {
             echo "::error::Fill MIKO_E2E_COMMIT with the accepted companion commit before review"
             exit 1
           }
 
-      - name: Check out exact Paseo source
+      - name: Check out exact Miko source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: mikoagents/miko-daemon
           ref: ${{ env.MIKO_E2E_COMMIT }}
-          path: paseo-source
+          path: miko-source
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
           cache: "npm"
 
-      - name: Build exact Paseo source
-        working-directory: paseo-source
+      - name: Build exact Miko source
+        working-directory: miko-source
         run: |
           npm ci
           npm run build:miko
@@ -179,31 +179,31 @@ jobs:
   hub-e2e:
     runs-on: ubuntu-latest
     env:
-      MIKO_E2E_WORKTREE: ${{ github.workspace }}/paseo-source
+      MIKO_E2E_WORKTREE: ${{ github.workspace }}/miko-source
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - name: Require the exact Paseo companion commit
+      - name: Require the exact Miko companion commit
         run: |
           [[ "$MIKO_E2E_COMMIT" =~ ^[0-9a-f]{40}$ ]] || {
             echo "::error::Fill MIKO_E2E_COMMIT with the accepted companion commit before review"
             exit 1
           }
 
-      - name: Check out exact Paseo source
+      - name: Check out exact Miko source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: mikoagents/miko-daemon
           ref: ${{ env.MIKO_E2E_COMMIT }}
-          path: paseo-source
+          path: miko-source
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
           cache: "npm"
 
-      - name: Build exact Paseo source
-        working-directory: paseo-source
+      - name: Build exact Miko source
+        working-directory: miko-source
         run: |
           npm ci
           npm run build:miko
@@ -220,5 +220,5 @@ jobs:
       - name: Build Hub production application
         run: npm run build
 
-      - name: Run Hub E2E against source-built Paseo
+      - name: Run Hub E2E against source-built Miko
         run: npm run test:e2e:hub:source

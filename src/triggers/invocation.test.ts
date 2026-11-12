@@ -17,10 +17,10 @@ describe("provider-neutral message invocation parser", () => {
   it.each([
     {
       name: "parses after the mention without changing the prompt",
-      message: "  @Paseo   repo=hub investigate",
-      mention: "@Paseo",
+      message: "  @Miko   repo=hub investigate",
+      mention: "@Miko",
       expected: {
-        prompt: "  @Paseo   repo=hub investigate",
+        prompt: "  @Miko   repo=hub investigate",
         inputs: { repo: "hub", agent: "codex" },
       },
     },
@@ -50,19 +50,19 @@ describe("provider-neutral message invocation parser", () => {
     },
     {
       name: "requires a mention boundary before removing the provider mention",
-      message: "@PaseoBot repo=hub investigate",
-      mention: "@Paseo",
+      message: "@MikoBot repo=hub investigate",
+      mention: "@Miko",
       expected: {
-        prompt: "@PaseoBot repo=hub investigate",
+        prompt: "@MikoBot repo=hub investigate",
         inputs: { agent: "codex" },
       },
     },
     {
       name: "does not remove an embedded provider mention",
-      message: "request @Paseo repo=hub investigate",
-      mention: "@Paseo",
+      message: "request @Miko repo=hub investigate",
+      mention: "@Miko",
       expected: {
-        prompt: "request @Paseo repo=hub investigate",
+        prompt: "request @Miko repo=hub investigate",
         inputs: { agent: "codex" },
       },
     },

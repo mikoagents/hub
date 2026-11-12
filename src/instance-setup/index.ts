@@ -18,7 +18,7 @@ import {
 } from "../organizations/provisioning.js";
 
 const BOOTSTRAP_ROW_ID = "default";
-const INTERACTIVE_ORGANIZATION_NAME = "Paseo Hub";
+const INTERACTIVE_ORGANIZATION_NAME = "Miko Hub";
 
 /**
  * What makes "this database has no accounts" hold until the claim commits. `share row exclusive`
@@ -325,7 +325,7 @@ async function createBootstrapData(
   );
   if (settings.ownerPassword === undefined) {
     throw new InstanceBootstrapError(
-      "PASEO_BOOTSTRAP_OWNER_PASSWORD is required until instance bootstrap completes",
+      "MIKO_BOOTSTRAP_OWNER_PASSWORD is required until instance bootstrap completes",
     );
   }
 

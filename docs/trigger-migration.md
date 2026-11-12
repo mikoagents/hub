@@ -55,7 +55,7 @@ execution. GitHub replies are posted to the issue or pull request that originate
 
 ## CLI deployment tradeoffs
 
-The new CLI reads sorted direct children of `.paseo/triggers/` and upserts each by YAML name. It
+The new CLI reads sorted direct children of `.miko/triggers/` and upserts each by YAML name. It
 does not delete a server trigger merely because its file is absent. A directory deployment is not
 atomic across files: if file three is invalid, files one and two may already be active. Fix the
 invalid file and rerun. Each individual trigger install is validated and committed atomically.

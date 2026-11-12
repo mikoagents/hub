@@ -70,7 +70,7 @@ const HUB_ORGANIZATION_ID = "org_1";
 const HUB_PROJECT_ID = "00000000-0000-4000-8000-000000000001";
 const HUB_PROJECT_SLUG = "default";
 const HUB_USER_ID = "hub-harness";
-const HUB_API_KEY = "paseo_pk_hub-harness_test";
+const HUB_API_KEY = "miko_pk_hub-harness_test";
 const HUB_API_KEY_ID = "00000000-0000-4000-8000-0000000000aa";
 const hubOperationAuth: OperationAuthenticator = {
   async authorize(request: Request, _scope: ApiKeyScope) {
@@ -342,7 +342,7 @@ export class HubHarness {
     await client.query(
       `insert into slack_connections
          (id, organization_id, team_id, slug, team_name, bot_user_id, bot_access_token, scopes)
-       values ($1, $2, $3, $4, 'Paseo', 'UBOT', 'xoxb-test', $5)
+       values ($1, $2, $3, $4, 'Miko', 'UBOT', 'xoxb-test', $5)
        on conflict (team_id) do nothing`,
       [id, HUB_ORGANIZATION_ID, teamId, slug, JSON.stringify(["app_mentions:read", "chat:write"])],
     );
@@ -359,7 +359,7 @@ export class HubHarness {
     await client.query(
       `insert into discord_connections
          (id, organization_id, guild_id, slug, guild_name)
-       values ('00000000-0000-4000-8000-0000000000c3', $1, 'paseo', 'paseo', 'Paseo')
+       values ('00000000-0000-4000-8000-0000000000c3', $1, 'paseo', 'paseo', 'Miko')
        on conflict (guild_id) do nothing`,
       [HUB_ORGANIZATION_ID],
     );
@@ -1442,7 +1442,7 @@ export class HubHarness {
       "        agent:",
       "          provider: opencode",
       "          mode: full-access",
-      '        prompt: [{ text: "Review ${{ paseo.prompt }}\\nContext: ${{ paseo.context }}" }]',
+      '        prompt: [{ text: "Review ${{ miko.prompt }}\\nContext: ${{ miko.context }}" }]',
     ].join("\n");
   }
 
@@ -1678,7 +1678,7 @@ export class HubHarness {
     );
     await client.query(
       `insert into "user" (id, name, email, email_verified)
-       values ($1, 'Hub harness', 'hub-harness@paseo.test', true)`,
+       values ($1, 'Hub harness', 'hub-harness@miko.test', true)`,
       [HUB_USER_ID],
     );
     await client.query(
@@ -1689,7 +1689,7 @@ export class HubHarness {
     await client.query(
       `insert into organization_api_keys
          (id, organization_id, name, prefix, verifier, scopes, created_by_user_id)
-       values ($1, $2, 'Hub harness', 'paseo_pk_harness', 'hub-harness-verifier',
+       values ($1, $2, 'Hub harness', 'miko_pk_harness', 'hub-harness-verifier',
                $3, $4)`,
       [
         HUB_API_KEY_ID,
@@ -1865,7 +1865,7 @@ export class HubHarness {
             token: `durable-scoped-token-${this.authorityTokenCount}`,
             expiresAt: Date.now() + 60 * 60_000,
             botUserId: 1234,
-            botLogin: "paseo[bot]",
+            botLogin: "miko[bot]",
           };
         },
         revoke: async (token) => {
@@ -2902,7 +2902,7 @@ async function availablePort(): Promise<number> {
 
 function machineHeaders(auth: "valid" | "missing" | "wrong"): Record<string, string> {
   if (auth === "valid") return { authorization: `Bearer ${HUB_API_KEY}` };
-  if (auth === "wrong") return { authorization: "Bearer paseo_pk_wrong" };
+  if (auth === "wrong") return { authorization: "Bearer miko_pk_wrong" };
   return {};
 }
 

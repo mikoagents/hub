@@ -32,7 +32,7 @@
 ### Added
 
 - One trigger can run on a schedule and on demand: `schedule.tick` may share a document with other events such as `manual.run`, so a prompt no longer needs two files. A tick runs with each input's default, so a document with a schedule cannot declare a required input.
-- `run.background: true` creates a Paseo background workspace for a run, keeping automated runs out of ordinary workspace listings. It defaults to `false`; daemons without background workspace support ignore it and run visibly.
+- `run.background: true` creates a Miko background workspace for a run, keeping automated runs out of ordinary workspace listings. It defaults to `false`; daemons without background workspace support ignore it and run visibly.
 - An unverified user who signs in with the correct password receives a verification email immediately, and the link signs them in.
 
 ### Changed
@@ -63,12 +63,12 @@
 
 ### Changed
 
-- Upgrade Paseo daemons before upgrading Hub: conversation continuity needs the current daemon.
+- Upgrade Miko daemons before upgrading Hub: conversation continuity needs the current daemon.
 - One consistent interface across sign-in, organization administration, projects, connections, triggers, and instance settings.
 - The trigger editor walks four numbered steps: what arrives, who may send it, where it lands, and what runs there.
 - Trigger forms list only the events Hub handles, and label events require the label they match.
 - Alerts say what happened, and empty pages no longer draw empty tables and panels.
-- Paseo shows Hub executions under their trigger's name instead of an execution id.
+- Miko shows Hub executions under their trigger's name instead of an execution id.
 
 ### Fixed
 
@@ -121,12 +121,12 @@
 
 ### Added
 
-- A post-app onboarding step that gives operators the exact `paseo hub login` command, watches for their daemon to connect, and lands them in the Default project.
+- A post-app onboarding step that gives operators the exact `miko hub login` command, watches for their daemon to connect, and lands them in the Default project.
 - An authenticated setup-resources API for guided clients to discover usable GitHub repositories, Slack workspaces, and Discord servers.
 
 ### Changed
 
-- Textual triggers now preserve the complete message as `${{ paseo.prompt }}` while exposing parsed typed inputs separately.
+- Textual triggers now preserve the complete message as `${{ miko.prompt }}` while exposing parsed typed inputs separately.
 - Startup logs print the complete browser URL for the running Hub.
 
 ### Fixed
@@ -158,11 +158,11 @@
 - A zero-configuration local start with an embedded PGlite database, generated durable authentication secret, and first-run operator account setup.
 - Browser-guided GitHub, Slack, and Discord app onboarding.
 - Slack Socket Mode for local bots that do not have a public URL.
-- A published `@getpaseo/hub` package that runs with `npx @getpaseo/hub`.
+- A published `@mikoagents/hub` package that runs with `npx @mikoagents/hub`.
 
 ### Changed
 
-- Embedded Hub data now lives under `$XDG_DATA_HOME/paseo-hub`, falling back to `~/.local/share/paseo-hub`.
+- Embedded Hub data now lives under `$XDG_DATA_HOME/miko-hub`, falling back to `~/.local/share/miko-hub`.
 - Configuration deployment can create or restore its implicit target project.
 
 ### Fixed
@@ -173,7 +173,7 @@
 
 ### Added
 
-- Execution-scoped worktree branch templates with `${{ paseo.execution.id }}` for unique branches that remain stable through retries and recovery.
+- Execution-scoped worktree branch templates with `${{ miko.execution.id }}` for unique branches that remain stable through retries and recovery.
 - Structured server logs for connection callbacks, provider event intake and routing, and workflow failures without recording event payloads or credentials.
 - A ready-to-adapt single-repository team bot example.
 
@@ -191,7 +191,7 @@
 ### Added
 
 - Multi-file configuration bundles with named environments, named agents, reusable prompt partials, and independently routed workflows.
-- Explicit `${{ paseo.context }}` access for provider context without rewriting `${{ paseo.prompt }}`.
+- Explicit `${{ miko.context }}` access for provider context without rewriting `${{ miko.prompt }}`.
 - Step-scoped GitHub credentials with repository, permission, and duration controls.
 - Safe routing reasons for known events that no workflow accepted.
 
@@ -206,7 +206,7 @@
 ### Added
 
 - Browser-based project configuration editing, including prompt partials and GitHub-backed configuration.
-- Durable Hub login support for the Paseo CLI.
+- Durable Hub login support for the Miko CLI.
 - Provider-specific passthrough options with provider-owned validation.
 - Scoped preapproval for the exact Hub MCP tools authorized by each workflow step.
 
@@ -223,9 +223,9 @@
 
 ### Added
 
-- Self-hosted automation for Paseo daemons with durable PostgreSQL-backed workflows.
+- Self-hosted automation for Miko daemons with durable PostgreSQL-backed workflows.
 - Discord, Slack, GitHub, and manual triggers for multi-step agent workflows.
-- Project configuration through the dashboard, GitHub synchronization, prompt partials, and `paseo hub deploy`.
+- Project configuration through the dashboard, GitHub synchronization, prompt partials, and `miko hub deploy`.
 - Organization authentication, daemon enrollment, API keys, and scoped access controls.
 - Stripe billing, organization usage visibility, and operator-managed plan limits.
 - A versioned public API with an OpenAPI 3.1 specification and interactive reference.

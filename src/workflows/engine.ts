@@ -1123,7 +1123,7 @@ function stepUsesTriggerContext(
     step.literalPrompt !== true &&
     step.prompt.some((block) =>
       expressionPathsInTemplate(block.kind === "text" ? block.value : block.content).some(
-        (path) => path.namespace === "paseo" && path.path === "context",
+        (path) => path.namespace === "miko" && path.path === "context",
       ),
     )
   );

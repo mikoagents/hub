@@ -186,8 +186,8 @@ describe("public API interface", () => {
             repositories: ["octocat/starter"],
           },
         ],
-        discord: [{ guildId: "123456789", guildName: "Paseo Guild" }],
-        slack: [{ teamId: "T01234567", teamName: "Paseo Workspace" }],
+        discord: [{ guildId: "123456789", guildName: "Miko Guild" }],
+        slack: [{ teamId: "T01234567", teamName: "Miko Workspace" }],
       },
     );
     ValidatedConfigurationSchema.parse(
@@ -476,8 +476,8 @@ function successfulOperations(): PublicOperations {
             repositories: ["octocat/starter"],
           },
         ],
-        discord: [{ guildId: "123456789", guildName: "Paseo Guild" }],
-        slack: [{ teamId: "T01234567", teamName: "Paseo Workspace" }],
+        discord: [{ guildId: "123456789", guildName: "Miko Guild" }],
+        slack: [{ teamId: "T01234567", teamName: "Miko Workspace" }],
       }),
     validateConfiguration: () =>
       Promise.resolve({
@@ -533,7 +533,7 @@ function installRequest(path: string, requestId: string = randomUUID()): Request
       projectSlug: "project",
       files: [
         {
-          path: ".paseo/hub.yml",
+          path: ".miko/hub.yml",
           content: "environments:\n  runner:\n    kind: docker\n    image: paseo/test\nagents: {}",
         },
       ],

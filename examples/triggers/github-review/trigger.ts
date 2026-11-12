@@ -1,4 +1,4 @@
-import { defineTrigger } from "@getpaseo/hub/triggers";
+import { defineTrigger } from "@mikoagents/hub/triggers";
 import { policy } from "./policy.js";
 import { reviewPullRequest } from "./review.js";
 

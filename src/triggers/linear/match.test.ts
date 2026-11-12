@@ -101,51 +101,51 @@ describe("Linear comment invocation parser handoff", () => {
   it.each([
     {
       name: "uses a later contains marker after a consumed pattern",
-      filters: { pattern: "@paseo", contains: "/run" },
-      body: "@paseo please /run priority=high investigate",
+      filters: { pattern: "@miko", contains: "/run" },
+      body: "@miko please /run priority=high investigate",
       expected: "priority=high investigate",
     },
     {
       name: "treats equal markers as one consumed marker",
-      filters: { pattern: "@paseo", contains: "@paseo" },
-      body: "@paseo priority=high investigate",
+      filters: { pattern: "@miko", contains: "@miko" },
+      body: "@miko priority=high investigate",
       expected: "priority=high investigate",
     },
     {
       name: "uses an overlapping contains marker that extends the pattern",
-      filters: { pattern: "@paseo", contains: "@paseo /run" },
-      body: "@paseo /run priority=high investigate",
+      filters: { pattern: "@miko", contains: "@miko /run" },
+      body: "@miko /run priority=high investigate",
       expected: "priority=high investigate",
     },
     {
       name: "keeps an input-shaped suffix of an overlapping contains marker",
-      filters: { pattern: "@paseo", contains: "@paseo repo=hub" },
-      body: "@paseo repo=hub priority=high investigate",
+      filters: { pattern: "@miko", contains: "@miko repo=hub" },
+      body: "@miko repo=hub priority=high investigate",
       expected: "repo=hub priority=high investigate",
     },
     {
       name: "uses the longer pattern when contains is inside it",
-      filters: { pattern: "@paseo /run", contains: "/run" },
-      body: "@paseo /run priority=high investigate",
+      filters: { pattern: "@miko /run", contains: "/run" },
+      body: "@miko /run priority=high investigate",
       expected: "priority=high investigate",
     },
     {
       name: "uses the first boundary-valid repeated contains marker",
-      filters: { pattern: "@paseo", contains: "/run" },
-      body: "@paseo /run prose /run priority=high investigate",
+      filters: { pattern: "@miko", contains: "/run" },
+      body: "@miko /run prose /run priority=high investigate",
       expected: "prose /run priority=high investigate",
     },
     {
       name: "does not treat an inside-word contains match as a marker",
-      filters: { pattern: "@paseo", contains: "run" },
-      body: "@paseo prerun priority=high investigate",
+      filters: { pattern: "@miko", contains: "run" },
+      body: "@miko prerun priority=high investigate",
       expected: "prerun priority=high investigate",
     },
     {
       name: "does not bypass a non-boundary pattern prefix with contains",
-      filters: { pattern: "@paseo", contains: "/run" },
-      body: "@paseoX /run priority=high investigate",
-      expected: "@paseoX /run priority=high investigate",
+      filters: { pattern: "@miko", contains: "/run" },
+      body: "@mikoX /run priority=high investigate",
+      expected: "@mikoX /run priority=high investigate",
     },
     {
       name: "preserves a leading input-shaped pattern before a later command",
@@ -165,7 +165,7 @@ function configuration() {
     max_runtime: "1h",
     idle_timeout: "5m",
     agent: { provider: "codex" },
-    prompt: [{ text: "Work from ${{ paseo.context }}" }],
+    prompt: [{ text: "Work from ${{ miko.context }}" }],
   };
   return compileHubConfig({
     environments: [{ name: "runner", kind: "daemon", daemon: "runner", cwd: "/repo" }],
@@ -192,7 +192,7 @@ function configuration() {
         name: "comment",
         on: "linear.comment_created",
         max_runtime: "2h",
-        filters: { project: "project-1", from_users: ["operator"], contains: "@paseo" },
+        filters: { project: "project-1", from_users: ["operator"], contains: "@miko" },
         steps: [base],
       },
     ],
@@ -226,7 +226,7 @@ function issue(
   };
 }
 
-function commentEvent(body = "@paseo please investigate"): NormalizedLinearCommentEvent {
+function commentEvent(body = "@miko please investigate"): NormalizedLinearCommentEvent {
   const event = issue();
   return {
     type: "comment",

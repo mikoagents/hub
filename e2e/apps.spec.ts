@@ -7,7 +7,7 @@ import {
 } from "./helpers/apps.js";
 import { expectOneFailure, recordsFor, stripAnsi } from "./helpers/logs.js";
 import { SHOTS, type AppSetupSession } from "./helpers/app-evidence.js";
-import type { PaseoHub } from "./helpers/hub.js";
+import type { MikoHub } from "./helpers/hub.js";
 
 // Every journey claims a second, genuinely pristine application beside the fixture's own.
 test.describe.configure({ timeout: 150_000 });
@@ -22,7 +22,7 @@ const OPERATOR = {
 const SAVE = "provider_application.verify_and_save";
 
 async function openSetup(
-  hub: PaseoHub,
+  hub: MikoHub,
   environmentApps?: readonly ("github" | "slack" | "discord" | "linear")[],
 ): Promise<AppSetupSession> {
   return await hub.openAppSetup({
@@ -62,7 +62,7 @@ test("a first account continues to app setup, and skipping it is durable", async
     await expect(
       page
         .getByRole("navigation", { name: "Breadcrumb", exact: true })
-        .getByText("Paseo Hub", { exact: true }),
+        .getByText("Miko Hub", { exact: true }),
     ).toBeVisible();
     await surface.shoot(SHOTS, "apps-14-skip-dashboard.desktop");
     // Business as usual once the transition completes: reloading never returns here.
@@ -126,7 +126,7 @@ test("GitHub repository access is set up on plain HTTP while event triggers wait
     // Verified is not green: credentials a provider accepted are not a working integration.
     await github.expectStatus("Verified");
     await github.expectSummary({
-      App: "Paseo Hub",
+      App: "Miko Hub",
       Owner: "acme-inc",
       Installations: "None yet",
       Events: "Needs a public HTTPS address",
@@ -330,7 +330,7 @@ test("Discord walks its portal in order and proves both secrets before saying Ve
     await discord.expectFocusedResult("Discord accepted this application.");
     await discord.expectStatus("Verified");
     await discord.expectSummary({
-      Application: "Paseo",
+      Application: "Miko",
       "Application ID": "900",
       Servers: "None yet",
     });
@@ -546,7 +546,7 @@ test("Slack webhooks use the exact built zero-env PGlite HTTPS proxy journey", a
     await surface.slack.chooseSlackTransport("Webhooks");
     await surface.slack.fill(SLACK_WEBHOOK_CREDENTIALS);
     await surface.slack.save();
-    await expect(page.getByRole("heading", { name: "Install Paseo in Acme" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Install Miko in Acme" })).toBeVisible();
     await page.getByRole("link", { name: "Accept installation" }).click();
     await surface.slack.expectStatus("Connected");
   } finally {
@@ -706,7 +706,7 @@ test("the operator finishes, then manages the same apps from the account menu", 
     await surface.linear.expand();
     await surface.linear.fillWorkingCredentials();
     await surface.linear.save();
-    await expect(page.getByRole("heading", { name: "Install Paseo in Acme" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Install Miko in Acme" })).toBeVisible();
     await page.getByRole("link", { name: "Accept installation" }).click();
     await surface.linear.expectStatus("Connected");
     await surface.linear.expectSummary({

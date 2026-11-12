@@ -112,7 +112,7 @@ interface AccountEmailLinkCommand {
 }
 
 /**
- * What `paseo hub connect` redeems. The child issues it because it is the process that owns the
+ * What `miko hub connect` redeems. The child issues it because it is the process that owns the
  * database, so a journey can enroll a daemon on an embedded instance with no PostgreSQL at all.
  */
 interface DaemonEnrollmentCommand {
@@ -152,9 +152,9 @@ const FIXTURE_STRIPE_SECRET_KEY = "sk_test_e2e_fixture_0000000000000000000000";
 
 async function main(): Promise<void> {
   const publicBaseUrl =
-    process.env["PASEO_HUB_APP_URL"] ?? `http://127.0.0.1:${requiredEnvironment("PORT")}`;
+    process.env["MIKO_HUB_APP_URL"] ?? `http://127.0.0.1:${requiredEnvironment("PORT")}`;
   const scenario = readScenario();
-  const databaseProfile = requiredEnvironment("PASEO_E2E_DATABASE_PROFILE");
+  const databaseProfile = requiredEnvironment("MIKO_E2E_DATABASE_PROFILE");
   const { database, runtime: databaseRuntime, locks } = await createBrowserDatabase();
   if (databaseProfile === "legacy") await seedLegacyMachineAuthTarget(databaseRuntime);
   const entitlements = composeEntitlements(database, databaseRuntime);
@@ -166,7 +166,7 @@ async function main(): Promise<void> {
     billingCatalog,
     billingClient: billingFixtureClient,
   } = await composeFixtureBilling(database, entitlements.seatUsage);
-  const authSecret = requiredEnvironment("PASEO_HUB_AUTH_SECRET");
+  const authSecret = requiredEnvironment("MIKO_HUB_AUTH_SECRET");
   const accountSetupFaults = new BrowserAccountSetupFaults();
   const accountEmails = new BrowserAccountEmails();
   const auth = browserAuthEnabled()
@@ -195,7 +195,7 @@ async function main(): Promise<void> {
           "daemons:enroll",
         ]);
   await writeFile(
-    requiredEnvironment("PASEO_E2E_MACHINE_KEY_FILE"),
+    requiredEnvironment("MIKO_E2E_MACHINE_KEY_FILE"),
     machineKey?.secret ?? "",
     "utf8",
   );
@@ -218,7 +218,7 @@ async function main(): Promise<void> {
             configuration: githubConfigured
               ? {
                   appId: "42",
-                  appSlug: "paseo",
+                  appSlug: "miko",
                   clientId: "client",
                   clientSecret: "secret",
                   webhookSecret: requiredEnvironment("GITHUB_WEBHOOK_SECRET"),
@@ -263,7 +263,7 @@ async function main(): Promise<void> {
                   appId: "browser-slack-app",
                   clientId: "browser-slack-client",
                   clientSecret: "browser-slack-client-secret",
-                  signingSecret: requiredEnvironment("PASEO_E2E_SLACK_SIGNING_SECRET"),
+                  signingSecret: requiredEnvironment("MIKO_E2E_SLACK_SIGNING_SECRET"),
                 }
               : null,
             ...(slackConfigured ? { botClient: slackBot } : {}),
@@ -294,7 +294,7 @@ async function main(): Promise<void> {
     billing,
     ...providers,
     publicBaseUrl,
-    completionTokenSecret: requiredEnvironment("PASEO_HUB_AUTH_SECRET"),
+    completionTokenSecret: requiredEnvironment("MIKO_HUB_AUTH_SECRET"),
     async close() {
       await auth?.close();
       await entitlements.close();
@@ -374,7 +374,7 @@ async function requestPortHandoff(): Promise<void> {
 }
 
 async function createBrowserDatabase() {
-  const bundle = await embeddedDatabaseRuntime(requiredEnvironment("PASEO_HUB_DATA_DIR"));
+  const bundle = await embeddedDatabaseRuntime(requiredEnvironment("MIKO_HUB_DATA_DIR"));
   try {
     await bundle.runtime.migrate();
     process.stdout.write("database runtime ready: embedded\n");
@@ -421,9 +421,9 @@ async function testServerOptions(): Promise<{
   tls?: { key: string; cert: string };
   trustedClientIpHeader?: string;
 }> {
-  const keyPath = process.env["PASEO_E2E_TLS_KEY"];
-  const certPath = process.env["PASEO_E2E_TLS_CERT"];
-  const trustedClientIpHeader = process.env["PASEO_HUB_TRUSTED_CLIENT_IP_HEADER"];
+  const keyPath = process.env["MIKO_E2E_TLS_KEY"];
+  const certPath = process.env["MIKO_E2E_TLS_CERT"];
+  const trustedClientIpHeader = process.env["MIKO_HUB_TRUSTED_CLIENT_IP_HEADER"];
   const trusted = trustedClientIpHeader === undefined ? {} : { trustedClientIpHeader };
   if (keyPath === undefined && certPath === undefined) return trusted;
   if (keyPath === undefined || certPath === undefined) throw new Error("incomplete test TLS");
@@ -451,7 +451,7 @@ function browserProviderPage(request: Request, publicBaseUrl: string): Response 
   callback.searchParams.set("state", state);
   callback.searchParams.set("code", "accepted");
   return new Response(
-    `<!doctype html><html><body><main><h1>Install Paseo in Acme</h1><p>${provider.name} is asking you to accept this app.</p><a href="${callback.toString()}">Accept installation</a></main></body></html>`,
+    `<!doctype html><html><body><main><h1>Install Miko in Acme</h1><p>${provider.name} is asking you to accept this app.</p><a href="${callback.toString()}">Accept installation</a></main></body></html>`,
     { headers: { "content-type": "text/html; charset=utf-8" } },
   );
 }
@@ -1042,7 +1042,7 @@ async function shutdown(
 }
 
 function readScenario(): BrowserProviderScenario {
-  const value = process.env["PASEO_BROWSER_PROVIDER_SCENARIO"] ?? "connected";
+  const value = process.env["MIKO_BROWSER_PROVIDER_SCENARIO"] ?? "connected";
   if (isBrowserProviderScenario(value)) return value;
   throw new Error(`invalid browser provider scenario: ${value}`);
 }
@@ -1052,14 +1052,14 @@ function hasBrowserGitHub(scenario: BrowserProviderScenario): boolean {
 }
 
 function browserAuthEnabled(): boolean {
-  const value = requiredEnvironment("PASEO_BROWSER_AUTH_ENABLED");
+  const value = requiredEnvironment("MIKO_BROWSER_AUTH_ENABLED");
   if (value === "true") return true;
   if (value === "false") return false;
   throw new Error(`invalid browser auth setting: ${value}`);
 }
 
 function machineAuthEnabled(): boolean {
-  const value = requiredEnvironment("PASEO_MACHINE_AUTH_ENABLED");
+  const value = requiredEnvironment("MIKO_MACHINE_AUTH_ENABLED");
   if (value === "true") return true;
   if (value === "false") return false;
   throw new Error(`invalid machine auth setting: ${value}`);
@@ -1072,7 +1072,7 @@ function requiredEnvironment(name: string): string {
 }
 
 function billingEnabled(): boolean {
-  return process.env["PASEO_BROWSER_BILLING_SCENARIO"] === "configured";
+  return process.env["MIKO_BROWSER_BILLING_SCENARIO"] === "configured";
 }
 
 function readFixtureBillingConfig(): BillingConfig {
@@ -1141,10 +1141,10 @@ async function activateStaticProviderApplications(
     identities.push({ provider: "github", id: "42", name: "paseo", ownerLogin: "acme-inc" });
   }
   if (input.scenario !== "not-configured" && input.scenario !== "slack-only") {
-    identities.push({ provider: "discord", id: "900", name: "Paseo" });
+    identities.push({ provider: "discord", id: "900", name: "Miko" });
   }
   if (input.scenario === "slack-only") {
-    identities.push({ provider: "slack", id: "browser-slack-app", name: "Paseo" });
+    identities.push({ provider: "slack", id: "browser-slack-app", name: "Miko" });
   }
   const store = createProviderApplicationStore(input.databaseRuntime, input.locks, input.database);
   for (const identity of identities) {
@@ -1172,7 +1172,7 @@ async function composeProviderApplications(input: {
   capability: ProviderApplications;
   registrations: readonly ProviderRegistration[];
 } | null> {
-  if (process.env["PASEO_BROWSER_PROVIDER_APPS"] !== "dynamic") return null;
+  if (process.env["MIKO_BROWSER_PROVIDER_APPS"] !== "dynamic") return null;
   const environment = await readProviderApplicationEnvironment(process.env);
   const store = createProviderApplicationStore(input.databaseRuntime, input.locks, input.database);
   const verifier = new BrowserProviderApplicationVerifier(input.scenario);
@@ -1215,7 +1215,7 @@ async function composeProviderApplications(input: {
       retry: () => providerRuntime.slackDelivery()?.retry() ?? Promise.resolve(),
     },
     inventory,
-    callbackOrigin: (request) => resolveCallbackOrigin(request, process.env["PASEO_HUB_APP_URL"]),
+    callbackOrigin: (request) => resolveCallbackOrigin(request, process.env["MIKO_HUB_APP_URL"]),
     beginCandidateConnection: async (request, organizationId, returnRoute, begin) => {
       const organizationSlug = await inventory.organizationSlug(organizationId);
       if (organizationSlug === undefined) throw new Error("organization unavailable");

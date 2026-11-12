@@ -32,7 +32,7 @@ export function NewTriggerPanel() {
           <CopyBlock
             label="Create a project"
             action="Copy command"
-            value="paseo-hub trigger init my-trigger"
+            value="miko trigger init my-trigger"
           />
           <p className="text-sm text-muted-foreground">
             Edit <code>my-trigger/trigger.ts</code>. <code>on</code> declares the events that start
@@ -79,7 +79,7 @@ export function NewTriggerPanel() {
               <CopyBlock
                 label="Start the local runner"
                 action="Copy commands"
-                value={`paseo-hub trigger runner-enroll local --url ${url} --token-file ./hub.key --out ./runner.key\npaseo-hub trigger runner --url ${url} --token-file ./runner.key --directory ./runner-data`}
+                value={`miko trigger runner-enroll local --url ${url} --token-file ./hub.key --out ./runner.key\nmiko trigger runner --url ${url} --token-file ./runner.key --directory ./runner-data`}
               />
             </div>
           </Disclosure>
@@ -91,7 +91,7 @@ export function NewTriggerPanel() {
           <CopyBlock
             label="Check and deploy"
             action="Copy commands"
-            value={`paseo-hub trigger check my-trigger/trigger.ts\npaseo-hub trigger deploy my-trigger/trigger.ts --url ${url} --token-file ./hub.key`}
+            value={`miko trigger check my-trigger/trigger.ts\nmiko trigger deploy my-trigger/trigger.ts --url ${url} --token-file ./hub.key`}
           />
           <p className="text-sm text-muted-foreground">
             Results and logs appear in the Trigger’s Run history. After editing the script, deploy

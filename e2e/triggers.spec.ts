@@ -25,7 +25,7 @@ test("creates code projects without requiring a daemon for non-agent workflows",
   await expect(page.getByText("No triggers", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "New trigger" }).click();
   await expect(page.getByRole("heading", { name: "New trigger", exact: true })).toBeVisible();
-  await expect(page.getByText("paseo-hub trigger init my-trigger", { exact: false })).toBeVisible();
+  await expect(page.getByText("miko trigger init my-trigger", { exact: false })).toBeVisible();
   await expect(page.getByRole("button", { name: "Save trigger" })).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: "Trigger YAML" })).toHaveCount(0);
   await page.getByRole("button", { name: "See the starter script" }).click();

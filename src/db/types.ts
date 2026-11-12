@@ -1525,7 +1525,7 @@ export interface Database {
   syncBillingPlan(input: SyncBillingPlanInput): Promise<BillingPlanRecord>;
   /**
    * Deactivates every synced plan whose id is not in `activeIds` — the sync applies its catalog as
-   * one reconciled snapshot, so a product that lost its `paseo_plan` tag or was deleted stops being
+   * one reconciled snapshot, so a product that lost its `miko_plan` tag or was deleted stops being
    * active and selectable rather than lingering. `src/billing/` only.
    */
   deactivateBillingPlansExcept(activeIds: readonly string[]): Promise<void>;

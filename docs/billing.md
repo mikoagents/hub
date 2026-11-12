@@ -230,7 +230,7 @@ in `e2e/billing-boundary.spec.ts`, `e2e/billing-catalog.spec.ts`, `e2e/billing-s
 `e2e/billing-mobile.spec.ts`. The fixture catalog in `src/e2e/harness/browser-billing.ts` mirrors
 the live Stripe products, allowance included: change one and change the other.
 
-Running the E2E suite locally requires `PASEO_E2E_WORKTREE` pointed at a checkout of
+Running the E2E suite locally requires `MIKO_E2E_WORKTREE` pointed at a checkout of
 `getpaseo/paseo` — the harness npm-packs the server packages from it. Without it, entitlements'
 metered-usage E2E fails with a worktree-mismatch error that reads like a code regression but is
 an environment gap.

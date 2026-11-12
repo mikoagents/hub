@@ -2,6 +2,15 @@ import type { ReactNode } from "react";
 
 import { cn } from "../../lib/utils.js";
 
+/** Related sections share a row once the page has room for two readable columns. */
+export function SectionGrid({ children }: { children: ReactNode }) {
+  return (
+    <div className="grid min-w-0 items-start gap-8 @5xl/page:grid-cols-2 [&>section]:mb-0">
+      {children}
+    </div>
+  );
+}
+
 /**
  * A labelled group of related content. The heading is set apart by the gap above it, not by
  * being bigger or heavier than the rows below. Owns its own bottom margin so callers never

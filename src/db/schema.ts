@@ -1213,7 +1213,7 @@ export const slackConnections = pgTable(
 
 /**
  * One OAuth installation per Linear workspace. Tokens belong to the Hub organization, never to
- * an individual Paseo project; project-scoped trigger routes select the Linear project later.
+ * an individual Hub project; project-scoped trigger routes select the Linear project later.
  */
 export const linearConnections = pgTable(
   "linear_connections",
@@ -1558,7 +1558,7 @@ export const organizationUsage = pgTable(
 
 export const BILLING_PLAN_PRICE_INTERVALS = ["monthly", "annual"] as const;
 
-// Mirror of Stripe's plan catalog (products + prices tagged `metadata.paseo_plan=true`).
+// Mirror of Stripe's plan catalog (products + prices tagged `metadata.miko_plan=true`).
 // `id` is the Stripe product id; nothing else in the schema references it — see the plan's
 // "materialize, don't reference" decision. Self-hosted instances never sync, so these tables
 // stay empty rather than absent.

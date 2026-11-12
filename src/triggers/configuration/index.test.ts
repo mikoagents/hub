@@ -46,7 +46,7 @@ on:
   github.issue_comment:
     connection: getpaseo-github
     filters:
-      contains: "@paseo-bot"
+      contains: "@miko-bot"
       from_users: [boudra]
 inputs:
   model:
@@ -58,7 +58,7 @@ run:
     daemon: devbox
     cwd: /workspace/company
   agent:
-    select: \${{ paseo.inputs.model }}
+    select: \${{ miko.inputs.model }}
     choices:
       codex:
         provider: codex
@@ -75,8 +75,8 @@ run:
       contents: write
       pull_requests: write
   prompt: |
-    Use Paseo when delegation is useful.
-    \${{ paseo.prompt }}
+    Use Miko when delegation is useful.
+    \${{ miko.prompt }}
   outputs:
     slack.reply:
       max: 5
@@ -129,7 +129,7 @@ describe("self-contained trigger documents", () => {
   });
 
   it("compiles an authored title template and preserves it through canonical YAML", () => {
-    const title = "Intake · ${{ paseo.execution.id }}";
+    const title = "Intake · ${{ miko.execution.id }}";
     const yaml = trigger.replace("  max_runtime: 90m", `  max_runtime: 90m\n  title: "${title}"`);
     const compiled = compileTriggerDocument(yaml);
     assert.equal(compiled.events[0]?.steps[0]?.title, title);
@@ -173,7 +173,7 @@ describe("self-contained trigger documents", () => {
       ["slack.mention", "github.issue_comment"],
     );
     assert.deepEqual(compiled.events[0]?.steps[0]?.agent, {
-      selector: "${{ paseo.inputs.model }}",
+      selector: "${{ miko.inputs.model }}",
       choices: {
         codex: { provider: "codex", model: "gpt-5.6-sol" },
         claude: { provider: "claude", model: "claude-opus-5" },

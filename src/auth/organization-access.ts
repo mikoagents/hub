@@ -161,35 +161,35 @@ export class OrganizationAccess {
   async handle(request: Request): Promise<Response> {
     const path = new URL(request.url).pathname;
     try {
-      if (request.method === "GET" && path === "/api/auth/paseo/state") {
+      if (request.method === "GET" && path === "/api/auth/miko/state") {
         return await this.state(request);
       }
-      if (request.method === "GET" && path === "/api/auth/paseo/api-keys") {
+      if (request.method === "GET" && path === "/api/auth/miko/api-keys") {
         return await this.listApiKeys(request);
       }
       if (request.method !== "POST") return notFound();
-      if (path === "/api/auth/paseo/create-organization") {
+      if (path === "/api/auth/miko/create-organization") {
         return await this.createOrganization(request);
       }
-      if (path === "/api/auth/paseo/select-organization") {
+      if (path === "/api/auth/miko/select-organization") {
         return await this.selectOrganization(request);
       }
-      if (path === "/api/auth/paseo/create-invitation") {
+      if (path === "/api/auth/miko/create-invitation") {
         return await this.createInvitation(request);
       }
-      if (path === "/api/auth/paseo/cancel-invitation") {
+      if (path === "/api/auth/miko/cancel-invitation") {
         return await this.cancelInvitation(request);
       }
-      if (path === "/api/auth/paseo/accept-invitation") {
+      if (path === "/api/auth/miko/accept-invitation") {
         return await this.acceptInvitation(request);
       }
-      if (path === "/api/auth/paseo/change-member-role") {
+      if (path === "/api/auth/miko/change-member-role") {
         return await this.changeMemberRole(request);
       }
-      if (path === "/api/auth/paseo/remove-member") return await this.removeMember(request);
-      if (path === "/api/auth/paseo/api-keys") return await this.createApiKey(request);
-      if (path === "/api/auth/paseo/revoke-api-key") return await this.revokeApiKey(request);
-      if (path === "/api/auth/paseo/revoke-cli-credential") {
+      if (path === "/api/auth/miko/remove-member") return await this.removeMember(request);
+      if (path === "/api/auth/miko/api-keys") return await this.createApiKey(request);
+      if (path === "/api/auth/miko/revoke-api-key") return await this.revokeApiKey(request);
+      if (path === "/api/auth/miko/revoke-cli-credential") {
         return await this.revokeCliCredential(request);
       }
       return notFound();
@@ -1042,7 +1042,7 @@ async function lockOrganizationMembershipTransitions(
   client: TransactionHandle,
   organizationId: string,
 ): Promise<void> {
-  await locks.withTxLock(client, `paseo-organization-membership:${organizationId}`);
+  await locks.withTxLock(client, `miko-organization-membership:${organizationId}`);
 }
 
 async function protectLastOwner(

@@ -1,6 +1,6 @@
 /** The new-project guide and CLI share one small, runnable example. */
 export function triggerStarter(name: string): string {
-  return `import { defineTrigger } from "@getpaseo/hub/triggers";
+  return `import { defineTrigger } from "@mikoagents/hub/triggers";
 
 export default defineTrigger({
   name: ${JSON.stringify(name)},

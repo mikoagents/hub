@@ -29,7 +29,7 @@ controls. `src/typography-policy.test.ts` enforces the parts a regex can see; th
 
 ## Tokens
 
-All tokens live in `src/styles.css`. Values come from Linear's measured ramp; Paseo green survives only
+All tokens live in `src/styles.css`. Values come from Linear's measured ramp; Miko green survives only
 as the link and focus hue.
 
 ### Surfaces and text
@@ -103,9 +103,13 @@ background only.
 | Site header             | h-12, `border-b`, `background` fill, no blur. A route's own actions sit here from `sm`; a phone fits the sidebar trigger and the trail only, so the route puts the same controls in the page.                                                                                |
 | Table                   | Header row h-9 `text-xs muted-foreground`. Body row h-11 `text-sm`. Rows divided by `border`. Hover fill only on rows that navigate. A column is as wide as its widest value; only `fill` columns, the ones whose values can be cut, share the remaining width and truncate. |
 | Card                    | p-6. `rounded-xl border bg-card`. Title `text-sm` foreground, description `text-sm muted-foreground`, gap-1 between them, gap-4 to the body.                                                                                                                                 |
-| Page column             | `max-w-5xl`, inset p-4 on phones and p-8 from `md`. Owned by the shell; screens never pad themselves.                                                                                                                                                                        |
+| Page column             | Fluid up to `100rem`, inset p-4 on phones and p-8 from `md`. Owned by the shell; screens never pad themselves.                                                                                                                                                               |
 | Section                 | mb-8 between sections, gap-3 inside. Owned by `Section`.                                                                                                                                                                                                                     |
 | Field                   | gap-2 between label, control, and description. Fields in a form: gap-4.                                                                                                                                                                                                      |
+
+Wide pages keep header descriptions at a readable measure. Use `SectionGrid` for related sections:
+it stacks them until the page content is at least `64rem` wide, then gives them equal columns.
+Detail dialogs grow to `72rem`, with a `2rem` viewport inset from `sm` and a `1rem` inset on phones.
 
 ## Emphasis without weight
 
@@ -115,6 +119,8 @@ background only.
 - Active navigation is a colour step at identical size and weight, plus the `accent` fill.
 - A number that matters is bigger, not bolder: `text-2xl` and `tabular-nums`.
 - A key/value pair is `text-xs muted-foreground` over `text-sm foreground`. Use `SummaryPanel`.
+- A setting the code computes when it runs has no value to show. Where a record shows its settings,
+  show the code that computes it, in `InlineCode`; the fill is what tells it apart from a value.
 - Table headers are `text-xs muted-foreground` in sentence case. They are the quietest text in the
   table.
 
@@ -129,13 +135,13 @@ missing app component.
 | Component                                                               | The one way to                                                                      |
 | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | `Page`, `PageHeader`, `PageHeaderSkeleton`                              | Lay out a screen: the column, the one `h1`, its description, status, and actions.   |
-| `Section`                                                               | Group content under a quiet heading with an optional trailing action.               |
+| `Section`, `SectionGrid`                                                | Group content under a quiet heading with an optional trailing action.               |
 | `Card`, `CardSkeleton`                                                  | Put content in a bordered surface. Icon, title, description, and action optional.   |
 | `Steps`                                                                 | Number a run of cards in order and join them with a rail.                           |
 | `DataTable`, `DataRow`, `DataCell`, `DataTableSkeleton`                 | List records at page level, in columns.                                             |
 | `RecordList`, `RecordRow`                                               | List a card's own few records, with no header row to repeat the card's subject.     |
 | `TwoLine`                                                               | Show a primary fact over a muted secondary one, in a cell or a row.                 |
-| `SummaryPanel`                                                          | Show labelled facts as a description list.                                          |
+| `SummaryPanel`                                                          | Show labelled facts, a card's labelled parts, or code names beside their values.    |
 | `StatTile`, `StatGrid`                                                  | Show a figure with a label.                                                         |
 | `StatusPill`                                                            | Show state. Never `Badge`, never a coloured span.                                   |
 | `EmptyState`                                                            | Say there is nothing here and what to do about it.                                  |
@@ -155,8 +161,8 @@ missing app component.
 | `ThemePicker`                                                           | Choose the browser's appearance preference.                                         |
 | `TabNav`, `TabNavSkeleton`                                              | Navigate between sibling routes under one page.                                     |
 | `Combobox`                                                              | Pick one of many with search.                                                       |
-| `CopyField`, `CopyButton`, `CopyBlock`, `CodeBlock`                     | Show a value to copy, or a block of code.                                           |
-| `Disclosure`                                                            | Open and close a bordered section.                                                  |
+| `CopyField`, `CopyButton`, `CopyBlock`, `CodeBlock`, `InlineCode`       | Show a value to copy, a block of code, or code inside a line.                       |
+| `Disclosure`                                                            | Open and close a bordered section, or a toggle inside a record.                     |
 | `FlowDiagram`                                                           | Read a workflow diagram and expand it for inspection.                               |
 | `RowActions`                                                            | Put a record's actions behind one kebab.                                            |
 | `RelativeTime`                                                          | Show when. There is no absolute-date formatter in screens.                          |
