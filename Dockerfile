@@ -13,6 +13,7 @@ FROM node:22-slim
 WORKDIR /app
 COPY package.json package-lock.json .npmrc ./
 RUN npm ci --omit=dev
+COPY bin/ bin/
 COPY --from=build /app/dist/ dist/
 COPY --from=build /app/.output/ .output/
 COPY --from=build /app/drizzle/ drizzle/

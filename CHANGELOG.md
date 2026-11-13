@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.12.0 - 2026-11-13
 
 ### Added
 
@@ -18,11 +18,17 @@
 
 ### Changed
 
+- Rename the product to Miko Hub, the command to `miko`, configuration directories to `.miko`, and Hub environment variables to `MIKO_HUB_*`. Preserve existing data by pointing `MIKO_HUB_DATA_DIR` at the current directory.
+- Publish validated multi-architecture releases to `ghcr.io/mikoagents/hub` after the full CI suite passes.
+
 - Hub now requires Miko execution protocol 2.0.0 and runs the selected daemon's providers directly, removing backend selectors and forwarding to existing Paseo services. Upgrade after draining active work; old daemon registrations and continuation keys are retired by the cutover migration.
 
 - Unhandled provider event receipts expire automatically after seven days on every instance. Receipts routed to a trigger or still referenced by a run or attachment remain available.
 
 ### Fixed
+
+- Include the Miko command in container images so the same release can run Hub and its code runner.
+- Align source-built CLI configuration discovery with Hub’s `.miko` bundle paths.
 
 - Agents can report unsuccessful work through `finish_execution.error`; Activity shows the failure reason and the workflow does not emit a success reaction. Structured completion schemas preserve the session's required execution identity.
 - Secondary text remains readable on hovered surfaces in light appearance.

@@ -16,6 +16,12 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 docker build --tag "$image" .
+# The same published image must run the code runner CLI as well as the HTTP server.
+docker run --rm --network none "$image" sh -ec '
+  node bin/miko.js trigger init /tmp/smoke-trigger
+  node bin/miko.js trigger check /tmp/smoke-trigger/trigger.ts
+'
+
 if [ -n "${DOCKER_SMOKE_SUBNET:-}" ]; then
   docker network create --subnet "$DOCKER_SMOKE_SUBNET" "$network" >/dev/null
 else

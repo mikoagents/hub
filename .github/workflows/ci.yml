@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_call:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -16,7 +17,7 @@ permissions:
 # companion PR creator commits it. Source-built jobs deliberately fail until it
 # is one exact 40-character SHA; mutable refs and repository variables are forbidden.
 env:
-  MIKO_E2E_COMMIT: 44779199d670c205a8dc4a48643ce804043d1fc1
+  MIKO_E2E_COMMIT: 40bdacabcd6df4dedc7c845c9cfe5ce016606dee
 
 jobs:
   typecheck:

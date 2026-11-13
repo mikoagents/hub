@@ -120,7 +120,7 @@ describe("GitHub App authentication", () => {
 
     assert.deepEqual(first, { id: 9876, login: "miko[bot]" });
     assert.deepEqual(cached, first);
-    assert.deepEqual(requests, ["GET /users/paseo%5Bbot%5D"]);
+    assert.deepEqual(requests, ["GET /users/miko%5Bbot%5D"]);
   });
 });
 

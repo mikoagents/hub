@@ -67,6 +67,13 @@ function main() {
   }
 
   const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
+  const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
+  if (
+    lock.version !== packageJson.version ||
+    lock.packages?.[""]?.version !== packageJson.version
+  ) {
+    throw new Error("package-lock.json version does not match package.json.");
+  }
   const changelog = readFileSync("CHANGELOG.md", "utf8");
   const metadata = releaseMetadata({ tag, packageVersion: packageJson.version, changelog });
   writeFileSync(notesPath, metadata.notes);

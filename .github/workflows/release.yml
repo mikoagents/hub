@@ -1,29 +1,66 @@
 name: Release
+run-name: Release ${{ github.ref_name }}
 
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
-  contents: write
-  packages: write
+  contents: read
 
 jobs:
-  release:
+  metadata:
+    name: Validate release source
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.release.outputs.version }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-
-      - name: Validate release metadata
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require a release tag on main
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == refs/tags/v* ]] || { echo '::error::Run Release from a vX.Y.Z tag'; exit 1; }
+          git merge-base --is-ancestor HEAD refs/remotes/origin/main
+      - name: Validate version, lockfile and changelog
         id: release
         env:
           RELEASE_NOTES_PATH: ${{ runner.temp }}/release-notes.md
-        run: node scripts/release-metadata.mjs "${{ github.ref_name }}" "$RELEASE_NOTES_PATH"
+        run: node scripts/release-metadata.mjs "$GITHUB_REF_NAME" "$RELEASE_NOTES_PATH"
+
+  checks:
+    name: Release checks
+    needs: metadata
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  release:
+    name: Publish GHCR image and GitHub Release
+    needs: [metadata, checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Read validated release metadata
+        id: release
+        env:
+          RELEASE_NOTES_PATH: ${{ runner.temp }}/release-notes.md
+        run: node scripts/release-metadata.mjs "$GITHUB_REF_NAME" "$RELEASE_NOTES_PATH"
 
       - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
@@ -36,6 +73,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and publish release image
+        id: image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
@@ -43,7 +81,7 @@ jobs:
           push: true
           tags: ${{ steps.release.outputs.image_tags }}
           labels: |
-            org.opencontainers.image.source=https://github.com/getpaseo/hub
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.version=${{ steps.release.outputs.version }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.licenses=Apache-2.0
@@ -55,9 +93,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_NOTES_PATH: ${{ runner.temp }}/release-notes.md
           RELEASE_TAG: ${{ github.ref_name }}
+          IMAGE: ghcr.io/${{ github.repository }}
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
           IS_PRERELEASE: ${{ steps.release.outputs.prerelease }}
         run: |
           set -euo pipefail
+          printf '\nContainer: %s@%s\n' "$IMAGE" "$IMAGE_DIGEST" >> "$RELEASE_NOTES_PATH"
           if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
             gh release edit "$RELEASE_TAG" --notes-file "$RELEASE_NOTES_PATH"
             exit 0
